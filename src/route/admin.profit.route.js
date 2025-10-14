@@ -1,22 +1,35 @@
 import express from "express";
 import {
-  getProfitMetricsAdmin,
-  getAllProfitTransactionsAdmin,
-  getProfitDetailsAdmin,
+  getProfitMetrics,
+  getAllProfitTransactions,
+  getProfitDetails,
 } from "../controller/admin.profit.controller.js";
+import { protect, isAdmin } from "../middleware/auth.middleware.js";
 
-const profitRouter = express.Router();
+const router = express.Router();
 
-// NOTE: Authentication and Admin check middleware (protect, isAdmin)
-// will be applied in the main admin.route.js file where this router is mounted.
+// All routes in this file are protected and require admin privileges
+router.use(protect, isAdmin);
 
-// Route to get the summary metrics (Total, Platform, Tutor, Landlord Profit)
-profitRouter.get("/metrics", getProfitMetricsAdmin);
+/**
+ * @route GET /api/v1/admin/profit/metrics
+ * @description Get high-level profit metrics for the dashboard cards.
+ * @access Admin
+ */
+router.get("/metrics", getProfitMetrics);
 
-// Route to get the paginated list of profit transactions (the main table)
-profitRouter.get("/", getAllProfitTransactionsAdmin);
+/**
+ * @route GET /api/v1/admin/profit/transactions
+ * @description Get a list of all profit-generating transactions (completed sessions).
+ * @access Admin
+ */
+router.get("/transactions", getAllProfitTransactions);
 
-// Route to get the detail view of a single profit transaction (the modal)
-profitRouter.get("/:transactionId", getProfitDetailsAdmin);
+/**
+ * @route GET /api/v1/admin/profit/transactions/:sessionId
+ * @description Get the detailed profit breakdown for a single completed session.
+ * @access Admin
+ */
+router.get("/transactions/:sessionId", getProfitDetails);
 
-export default profitRouter;
+export default router;

@@ -7,16 +7,12 @@ import {
   approveWithdrawalAdmin,
   rejectWithdrawalAdmin,
 } from "../controller/withdrawal.controller.js";
-import {
-  getAllReportsAdmin,
-  getReportDetailsAdmin,
-  updateReportStatusAdmin,
-} from "../controller/admin.report.controller.js";
+// import {
+//   getAllReportsAdmin,
+//   getReportDetailsAdmin,
+//   updateReportStatusAdmin,
+// } from "../controller/admin.report.controller.js";
 import { sendNotificationsAdmin } from "../controller/admin.notification.controller.js";
-import {
-  getSettingsAdmin,
-  updateSettingsAdmin,
-} from "../controller/settings.controller.js";
 
 // --- Import dedicated route files ---
 import courseRoutes from "./admin.course.route.js";
@@ -26,6 +22,7 @@ import userRoutes from "./admin.user.routes.js";
 import locationRoutes from "./admin.location.routes.js";
 import transactionRoutes from "./admin.transaction.routes.js";
 import applicationRoutes from "./admin.application.routes.js";
+import settingsRoutes from "./admin.settings.route.js";
 
 const adminRouter = express.Router();
 
@@ -57,6 +54,8 @@ adminRouter.use("/transactions", transactionRoutes);
 // 7. Application Review / KYC Management (Tutor Applications)
 adminRouter.use("/applications", applicationRoutes); // NEW ROUTE MOUNTED
 
+adminRouter.use("/settings", settingsRoutes);
+
 // -------------------------------------------------------------
 // EXISTING ADMIN ROUTES
 // -------------------------------------------------------------
@@ -67,15 +66,13 @@ adminRouter.patch("/withdrawals/:withdrawalId/approve", approveWithdrawalAdmin);
 adminRouter.patch("/withdrawals/:withdrawalId/reject", rejectWithdrawalAdmin);
 
 // Report Management
-adminRouter.get("/reports", getAllReportsAdmin);
-adminRouter.get("/reports/:reportId", getReportDetailsAdmin);
-adminRouter.patch("/reports/:reportId/status", updateReportStatusAdmin);
+// adminRouter.get("/reports", getAllReportsAdmin);
+// adminRouter.get("/reports/:reportId", getReportDetailsAdmin);
+// adminRouter.patch("/reports/:reportId/status", updateReportStatusAdmin);
 
 // Notification Management
 adminRouter.post("/notifications/send", sendNotificationsAdmin);
 
 // Settings Management
-adminRouter.get("/settings", getSettingsAdmin);
-adminRouter.patch("/settings", updateSettingsAdmin);
 
 export default adminRouter;
