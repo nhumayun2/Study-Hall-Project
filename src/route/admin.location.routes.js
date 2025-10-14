@@ -1,33 +1,59 @@
 import express from "express";
 import {
-  getAllLocationsAdmin,
-  getLocationDetailsAdmin,
-  approveLocationAdmin,
-  rejectLocationAdmin,
-  toggleLocationActiveStatusAdmin,
+  getAllLocations,
+  getLocationDetails,
+  getLocationSessionHistory,
+  approveLocation,
+  rejectLocation,
+  toggleLocationActiveStatus,
 } from "../controller/admin.location.controller.js";
+import { protect, isAdmin } from "../middleware/auth.middleware.js";
 
-const locationRouter = express.Router();
+const router = express.Router();
 
-// NOTE: Authentication and Admin check middleware (protect, isAdmin)
-// will be applied in the main admin.route.js file where this router is mounted.
+// All routes in this file are protected and require admin privileges
+router.use(protect, isAdmin);
 
-// Get a list of all locations (with filtering, search, and pagination)
-locationRouter.get("/", getAllLocationsAdmin);
+/**
+ * @route GET /api/v1/admin/locations
+ * @description Get a list of all locations with filtering and pagination.
+ * @access Admin
+ */
+router.get("/", getAllLocations);
 
-// Get details of a specific location for review/detail view
-locationRouter.get("/:locationId", getLocationDetailsAdmin);
+/**
+ * @route GET /api/v1/admin/locations/:locationId
+ * @description Get detailed information for a single location.
+ * @access Admin
+ */
+router.get("/:locationId", getLocationDetails);
 
-// Approve a submitted location
-locationRouter.patch("/:locationId/approve", approveLocationAdmin);
+/**
+ * @route GET /api/v1/admin/locations/:locationId/history
+ * @description Get the session history for a specific location.
+ * @access Admin
+ */
+router.get("/:locationId/history", getLocationSessionHistory);
 
-// Reject a submitted location (requires rejectionReason in body)
-locationRouter.patch("/:locationId/reject", rejectLocationAdmin);
+/**
+ * @route PATCH /api/v1/admin/locations/:locationId/approve
+ * @description Approve a pending location.
+ * @access Admin
+ */
+router.patch("/:locationId/approve", approveLocation);
 
-// Toggle a location's active/inactive status (requires isActive boolean in body)
-locationRouter.patch(
-  "/:locationId/toggle-active",
-  toggleLocationActiveStatusAdmin
-);
+/**
+ * @route PATCH /api/v1/admin/locations/:locationId/reject
+ * @description Reject a pending location.
+ * @access Admin
+ */
+router.patch("/:locationId/reject", rejectLocation);
 
-export default locationRouter;
+/**
+ * @route PATCH /api/v1/admin/locations/:locationId/toggle-active
+ * @description Deactivate or reactivate an approved location.
+ * @access Admin
+ */
+router.patch("/:locationId/toggle-active", toggleLocationActiveStatus);
+
+export default router;

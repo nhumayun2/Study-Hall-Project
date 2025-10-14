@@ -5,22 +5,39 @@ import {
   approveTutorApplication,
   rejectTutorApplication,
 } from "../controller/admin.application.controller.js";
+import { protect, isAdmin } from "../middleware/auth.middleware.js";
 
-const applicationRouter = express.Router();
+const router = express.Router();
 
-// Get list of all tutor applications (filterable by status)
-applicationRouter.get("/tutor", getAllTutorApplications);
+// All routes in this file are protected and require admin privileges
+router.use(protect, isAdmin);
 
-// Get details of a specific tutor application
-applicationRouter.get("/tutor/:applicationId", getTutorApplicationDetails);
+/**
+ * @route GET /api/v1/admin/applications/tutors
+ * @description Get a list of all tutor applications with filtering.
+ * @access Admin
+ */
+router.get("/tutors", getAllTutorApplications);
 
-// Approve a tutor application (promotes user to Tutor role)
-applicationRouter.patch(
-  "/tutor/:applicationId/approve",
-  approveTutorApplication
-);
+/**
+ * @route GET /api/v1/admin/applications/tutors/:applicationId
+ * @description Get detailed information for a single tutor application.
+ * @access Admin
+ */
+router.get("/tutors/:applicationId", getTutorApplicationDetails);
 
-// Reject a tutor application
-applicationRouter.patch("/tutor/:applicationId/reject", rejectTutorApplication);
+/**
+ * @route PATCH /api/v1/admin/applications/tutors/:applicationId/approve
+ * @description Approve a tutor application and promote the user.
+ * @access Admin
+ */
+router.patch("/tutors/:applicationId/approve", approveTutorApplication);
 
-export default applicationRouter;
+/**
+ * @route PATCH /api/v1/admin/applications/tutors/:applicationId/reject
+ * @description Reject a tutor application.
+ * @access Admin
+ */
+router.patch("/tutors/:applicationId/reject", rejectTutorApplication);
+
+export default router;

@@ -6,56 +6,50 @@ import { TutorApplication } from "../model/tutorApplication.model.js";
 import { User } from "../model/user.model.js";
 
 /**
- * Admin: Fetches all tutor applications with filtering and pagination.
+ * @description ADMIN gets a list of all tutor applications, with filtering.
+ * @route GET /api/v1/admin/applications/tutors
+ * @access Admin
  */
 export const getAllTutorApplications = catchAsync(async (req, res) => {
-  const { status, page = 1, limit = 10 } = req.query;
+  const { status = "Pending", page = 1, limit = 10 } = req.query; // Default to pending applications
   const skip = (parseInt(page) - 1) * parseInt(limit);
 
   const query = {};
-
-  // Filter by application status (pending, approved, rejected)
   if (status) {
-    if (!["pending", "approved", "rejected"].includes(status)) {
-      throw new AppError(httpStatus.BAD_REQUEST, "Invalid status filter.");
-    }
     query.status = status;
-  } else {
-    // By default, show pending applications first
-    query.status = "pending";
   }
 
+  const totalApplications = await TutorApplication.countDocuments(query);
   const applications = await TutorApplication.find(query)
-    .populate("user", "name email role createdAt") // Populate user info for context
+    .populate("user", "name email createdAt")
     .sort({ createdAt: -1 })
     .skip(skip)
     .limit(parseInt(limit));
 
-  const totalApplications = await TutorApplication.countDocuments(query);
-
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
-    message: "Tutor applications fetched successfully",
+    message: "Tutor applications fetched successfully.",
     data: {
       applications,
       total: totalApplications,
       page: parseInt(page),
-      limit: parseInt(limit),
+      totalPages: Math.ceil(totalApplications / limit),
     },
   });
 });
 
 /**
- * Admin: Get detailed information for a single application.
+ * @description ADMIN gets the details of a single tutor application.
+ * @route GET /api/v1/admin/applications/tutors/:applicationId
+ * @access Admin
  */
 export const getTutorApplicationDetails = catchAsync(async (req, res) => {
   const { applicationId } = req.params;
-
   const application = await TutorApplication.findById(applicationId).populate(
     "user",
-    "name email role phone avatar"
-  ); // Get all necessary user data
+    "name email"
+  );
 
   if (!application) {
     throw new AppError(httpStatus.NOT_FOUND, "Tutor application not found.");
@@ -64,107 +58,97 @@ export const getTutorApplicationDetails = catchAsync(async (req, res) => {
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
-    message: "Tutor application details fetched successfully",
+    message: "Application details fetched successfully.",
     data: application,
   });
 });
 
 /**
- * Admin: Approves a tutor application, updating its status and promoting the user's role.
+ * @description ADMIN approves a tutor application, promoting the user.
+ * @route PATCH /api/v1/admin/applications/tutors/:applicationId/approve
+ * @access Admin
  */
 export const approveTutorApplication = catchAsync(async (req, res) => {
   const { applicationId } = req.params;
 
   const application = await TutorApplication.findById(applicationId);
-
-  if (!application) {
-    throw new AppError(httpStatus.NOT_FOUND, "Tutor application not found.");
-  }
-
-  if (application.status === "approved") {
+  if (!application || application.status !== "Pending") {
     throw new AppError(
       httpStatus.BAD_REQUEST,
-      "Application is already approved."
+      "Application not found or has already been processed."
     );
   }
 
-  // 1. Update Application Status
-  application.status = "approved";
-  await application.save();
-
-  // 2. Promote User Role
   const user = await User.findById(application.user);
-
   if (!user) {
     throw new AppError(
       httpStatus.NOT_FOUND,
-      "User associated with this application not found."
+      "The user associated with this application no longer exists."
     );
   }
 
-  // Check if the user is not already a tutor (or admin/owner)
-  if (user.role === "Student") {
-    user.role = "Tutor";
-    // Ensure the account is active upon approval
-    user.isActive = true;
-    await user.save();
-  } else if (user.role === "Tutor") {
-    // Allow re-approval but skip role change if already set
-  } else {
-    // Prevent approval if they are an admin or location owner (shouldn't happen, but good check)
-    throw new AppError(
-      httpStatus.FORBIDDEN,
-      `Cannot promote user with role: ${user.role}`
-    );
-  }
+  // Update the User document
+  user.role = "Tutor";
+  user.status = "Active";
+  user.tutorProfile = {
+    bio: application.bio,
+    experience: application.experience,
+    educationLevel: application.educationLevel,
+    major: application.major,
+    categories: application.categoriesToTeach,
+    isVerified: true, // Mark as KYC verified upon approval
+    rating: 0,
+    totalReviews: 0,
+  };
+
+  // Update the Application document
+  application.status = "Approved";
+
+  // Save both documents
+  await user.save({ validateBeforeSave: false });
+  await application.save();
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
     message:
-      "Tutor application approved and user successfully promoted to Tutor.",
-    data: { application, userRole: user.role },
+      "Tutor application approved. The user has been promoted to a Tutor.",
+    data: application,
   });
 });
 
 /**
- * Admin: Rejects a tutor application.
+ * @description ADMIN rejects a tutor application.
+ * @route PATCH /api/v1/admin/applications/tutors/:applicationId/reject
+ * @access Admin
  */
 export const rejectTutorApplication = catchAsync(async (req, res) => {
   const { applicationId } = req.params;
-  const { rejectionReason } = req.body; // Reason is highly recommended for feedback
+  const { reason } = req.body;
 
-  if (!rejectionReason || rejectionReason.length < 10) {
+  if (!reason) {
     throw new AppError(
       httpStatus.BAD_REQUEST,
-      "Rejection reason is required and should be descriptive."
+      "A reason for rejection is required."
     );
   }
 
   const application = await TutorApplication.findById(applicationId);
-
-  if (!application) {
-    throw new AppError(httpStatus.NOT_FOUND, "Tutor application not found.");
-  }
-
-  if (application.status === "rejected") {
+  if (!application || application.status !== "Pending") {
     throw new AppError(
       httpStatus.BAD_REQUEST,
-      "Application is already rejected."
+      "Application not found or has already been processed."
     );
   }
 
-  // Update Application Status and add rejection reason
-  application.status = "rejected";
-  application.rejectionReason = rejectionReason;
+  application.status = "Rejected";
+  application.rejectionReason = reason;
   await application.save();
-
-  // NOTE: We don't change the user's role from 'Student', but we might send a notification.
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
-    message: "Tutor application rejected.",
+    message: "Tutor application has been rejected.",
     data: application,
   });
 });

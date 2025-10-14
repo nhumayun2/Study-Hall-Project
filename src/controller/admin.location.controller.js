@@ -1,94 +1,70 @@
 import httpStatus from "http-status";
-import catchAsync from "../utils/catchAsync.js";
-import sendResponse from "../utils/sendResponse.js";
 import AppError from "../errors/AppError.js";
+import sendResponse from "../utils/sendResponse.js";
+import catchAsync from "../utils/catchAsync.js";
 import { Location } from "../model/location.model.js";
-import { User } from "../model/user.model.js"; // To populate the owner info
+import { User } from "../model/user.model.js";
+import { Session } from "../model/session.model.js"; // Import the Session model
 
 /**
- * @desc Admin: Get all locations with filtering, searching, and pagination
+ * @description ADMIN gets a paginated and filterable list of all locations.
  * @route GET /api/v1/admin/locations
  * @access Admin
- * Used for the main 'Locations' review/management list.
  */
-export const getAllLocationsAdmin = catchAsync(async (req, res) => {
+export const getAllLocations = catchAsync(async (req, res) => {
   const { page = 1, limit = 10, search, approvalStatus, isActive } = req.query;
   const skip = (parseInt(page) - 1) * parseInt(limit);
-  const query = {}; // Filter by Approval Status (e.g., Pending, Approved, Rejected)
+  const query = {};
 
-  if (approvalStatus) {
-    const validStatuses = ["Pending", "Approved", "Rejected"];
-    if (!validStatuses.includes(approvalStatus)) {
-      throw new AppError(
-        httpStatus.BAD_REQUEST,
-        "Invalid approvalStatus filter provided."
-      );
-    }
-    query.approvalStatus = approvalStatus;
-  } // Filter by Active/Deactivated Status
-  if (isActive !== undefined) {
-    query.isActive = isActive === "true";
-  } else {
-    // Default: Only show locations that are either pending review or currently active/approved
-    query.$or = [{ approvalStatus: { $ne: "Rejected" } }, { isActive: true }];
-  } // Search filter (by Location Name or Owner Email/Name)
+  if (approvalStatus) query.approvalStatus = approvalStatus;
+  if (isActive !== undefined) query.isActive = isActive === "true";
 
   if (search) {
-    // Search by Location Name
-    query.$or = [{ name: { $regex: search, $options: "i" } }]; // Add search by owner if User model is linked (assuming location is linked to an owner/user)
     const matchingUsers = await User.find({
       $or: [
         { name: { $regex: search, $options: "i" } },
         { email: { $regex: search, $options: "i" } },
       ],
     }).select("_id");
-    if (matchingUsers.length > 0) {
-      query.$or.push({ owner: { $in: matchingUsers.map((user) => user._id) } });
-    }
+
+    query.$or = [
+      { name: { $regex: search, $options: "i" } },
+      { address: { $regex: search, $options: "i" } },
+      { owner: { $in: matchingUsers.map((user) => user._id) } },
+    ];
   }
 
   const totalLocations = await Location.countDocuments(query);
   const locations = await Location.find(query)
-    .populate("owner", "name email phone")
+    .populate("owner", "name email")
     .sort({ createdAt: -1 })
     .skip(skip)
-    .limit(parseInt(limit)); // Format data for admin dashboard table view
-
-  const formattedLocations = locations.map((location) => ({
-    id: location._id,
-    name: location.name,
-    city: location.city || "N/A",
-    submittedBy: location.owner ? location.owner.name : "N/A",
-    submissionDate: location.createdAt.toISOString().split("T")[0],
-    approvalStatus: location.approvalStatus,
-    isActive: location.isActive,
-  }));
+    .limit(parseInt(limit));
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
-    message: "Locations retrieved successfully for Admin Panel.",
+    message: "Locations retrieved successfully for admin panel.",
     data: {
-      locations: formattedLocations,
+      locations,
       total: totalLocations,
       page: parseInt(page),
-      limit: parseInt(limit),
+      totalPages: Math.ceil(totalLocations / limit),
     },
   });
 });
 
 /**
- * @desc Admin: Get detailed information about a single location
+ * @description ADMIN gets detailed information about a single location.
  * @route GET /api/v1/admin/locations/:locationId
  * @access Admin
- * Used for the 'Review/Details' page of a location.
  */
-export const getLocationDetailsAdmin = catchAsync(async (req, res) => {
+export const getLocationDetails = catchAsync(async (req, res) => {
   const { locationId } = req.params;
-
-  const location = await Location.findById(locationId)
-    .populate("owner", "name email phone")
-    .lean();
+  const location = await Location.findById(locationId).populate(
+    "owner",
+    "name email"
+  );
 
   if (!location) {
     throw new AppError(httpStatus.NOT_FOUND, "Location not found.");
@@ -103,65 +79,97 @@ export const getLocationDetailsAdmin = catchAsync(async (req, res) => {
 });
 
 /**
- * @desc Admin: Approve a submitted location
- * @route PATCH /api/v1/admin/locations/:locationId/approve
+ * @description ADMIN gets the session history for a specific location.
+ * @route GET /api/v1/admin/locations/:locationId/history
  * @access Admin
  */
-export const approveLocationAdmin = catchAsync(async (req, res) => {
+export const getLocationSessionHistory = catchAsync(async (req, res) => {
   const { locationId } = req.params;
-  const location = await Location.findByIdAndUpdate(
-    locationId,
-    {
-      approvalStatus: "Approved",
-      isActive: true, // Auto-activate upon approval
-      approvedBy: req.user._id,
-      approvedAt: new Date(),
-      rejectionReason: null,
-    },
-    { new: true }
-  );
+  const { page = 1, limit = 10, status } = req.query;
+  const skip = (parseInt(page) - 1) * parseInt(limit);
 
-  if (!location) {
-    throw new AppError(httpStatus.NOT_FOUND, "Location not found.");
-  } // OPTIONAL: Update the owner's role or status if needed (e.g., if approval triggers a change) // await User.findByIdAndUpdate(location.owner, { /* update fields */ });
+  const query = { location: locationId };
+  if (status) {
+    query.status = status;
+  }
+
+  const totalSessions = await Session.countDocuments(query);
+  const sessions = await Session.find(query)
+    .populate("student", "name")
+    .populate("tutor", "name")
+    .sort({ "schedule.date": -1 })
+    .skip(skip)
+    .limit(parseInt(limit));
+
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
-    message: `Location '${location.name}' has been approved and activated.`,
+    message: `Session history for location fetched successfully.`,
+    data: {
+      sessions,
+      total: totalSessions,
+      page: parseInt(page),
+      totalPages: Math.ceil(totalSessions / limit),
+    },
+  });
+});
+
+/**
+ * @description ADMIN approves a location listing.
+ * @route PATCH /api/v1/admin/locations/:locationId/approve
+ * @access Admin
+ */
+export const approveLocation = catchAsync(async (req, res) => {
+  const { locationId } = req.params;
+
+  const location = await Location.findById(locationId);
+  if (!location || location.approvalStatus !== "Pending") {
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      "Location not found or is not pending approval."
+    );
+  }
+
+  location.approvalStatus = "Approved";
+  location.isActive = true; // Automatically activate upon approval
+  await location.save();
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: `Location '${location.name}' has been approved and is now active.`,
     data: location,
   });
 });
 
 /**
- * @desc Admin: Reject a submitted location
+ * @description ADMIN rejects a location listing.
  * @route PATCH /api/v1/admin/locations/:locationId/reject
  * @access Admin
  */
-export const rejectLocationAdmin = catchAsync(async (req, res) => {
+export const rejectLocation = catchAsync(async (req, res) => {
   const { locationId } = req.params;
-  const { rejectionReason } = req.body;
-  if (!rejectionReason || rejectionReason.trim().length < 10) {
+  const { reason } = req.body;
+
+  if (!reason) {
     throw new AppError(
       httpStatus.BAD_REQUEST,
-      "A detailed rejection reason (min 10 characters) is required."
+      "A reason for rejection is required."
     );
   }
 
-  const location = await Location.findByIdAndUpdate(
-    locationId,
-    {
-      approvalStatus: "Rejected",
-      isActive: false, // Ensure rejected locations are inactive
-      rejectionReason: rejectionReason,
-      approvedBy: null,
-      approvedAt: null,
-    },
-    { new: true }
-  );
-
-  if (!location) {
-    throw new AppError(httpStatus.NOT_FOUND, "Location not found.");
+  const location = await Location.findById(locationId);
+  if (!location || location.approvalStatus !== "Pending") {
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      "Location not found or is not pending approval."
+    );
   }
+
+  location.approvalStatus = "Rejected";
+  location.isActive = false;
+  location.rejectionReason = reason;
+  await location.save();
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
@@ -172,39 +180,29 @@ export const rejectLocationAdmin = catchAsync(async (req, res) => {
 });
 
 /**
- * @desc Admin: Toggle the active status of an approved location (Deactivate/Reactivate)
+ * @description ADMIN toggles the active status of an already approved location.
  * @route PATCH /api/v1/admin/locations/:locationId/toggle-active
  * @access Admin
  */
-export const toggleLocationActiveStatusAdmin = catchAsync(async (req, res) => {
+export const toggleLocationActiveStatus = catchAsync(async (req, res) => {
   const { locationId } = req.params;
-  const { isActive } = req.body;
-  if (typeof isActive !== "boolean") {
+
+  const location = await Location.findById(locationId);
+  if (!location || location.approvalStatus !== "Approved") {
     throw new AppError(
       httpStatus.BAD_REQUEST,
-      "A boolean value for 'isActive' is required."
+      "Location not found or has not been approved yet."
     );
   }
 
-  const location = await Location.findByIdAndUpdate(
-    locationId,
-    { isActive: isActive },
-    { new: true, select: "name address isActive approvalStatus" }
-  );
+  location.isActive = !location.isActive;
+  await location.save();
 
-  if (!location) {
-    throw new AppError(httpStatus.NOT_FOUND, "Location not found.");
-  }
-
-  const action = isActive ? "activated" : "deactivated";
+  const action = location.isActive ? "activated" : "deactivated";
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
-    message: `Location '${location.name}' has been ${action}.`,
-    data: {
-      locationId: location._id,
-      isActive: location.isActive,
-      status: location.approvalStatus,
-    },
+    message: `Location has been successfully ${action}.`,
+    data: location,
   });
 });

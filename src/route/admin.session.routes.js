@@ -1,38 +1,51 @@
 import express from "express";
 import {
-  getAllSessionsAdmin,
-  getSessionDetailsAdmin,
-  toggleSessionBlockStatusAdmin,
-  getSessionReviewsAdmin,
-  updateSessionStatusAdmin,
-} from "../controller/admin.session.controller.js"; // Import the session controller
+  getAllSessions,
+  getSessionDetails,
+  updateSessionStatus,
+  toggleSessionBlockStatus,
+  getSessionReviews,
+} from "../controller/admin.session.controller.js";
+import { protect, isAdmin } from "../middleware/auth.middleware.js";
 
 const router = express.Router();
 
-// NOTE: Middleware is applied in the parent admin.route.js file.
+// All routes in this file are protected and require admin privileges
+router.use(protect, isAdmin);
 
-// -------------------------------------------------------------
-// SESSION MANAGEMENT ROUTES
-// -------------------------------------------------------------
+/**
+ * @route GET /api/v1/admin/sessions
+ * @description Get a list of all sessions with filtering and pagination.
+ * @access Admin
+ */
+router.get("/", getAllSessions);
 
-// @route GET /api/v1/admin/sessions
-// @desc Get list of all sessions with filtering/pagination for admin panel
-router.route("/").get(getAllSessionsAdmin);
+/**
+ * @route GET /api/v1/admin/sessions/:sessionId
+ * @description Get detailed information for a single session.
+ * @access Admin
+ */
+router.get("/:sessionId", getSessionDetails);
 
-// @route GET /api/v1/admin/sessions/:sessionId
-// @desc Get detailed information for a specific session
-router.route("/:sessionId").get(getSessionDetailsAdmin);
+/**
+ * @route GET /api/v1/admin/sessions/:sessionId/reviews
+ * @description Get all reviews associated with a specific session.
+ * @access Admin
+ */
+router.get("/:sessionId/reviews", getSessionReviews);
 
-// @route PATCH /api/v1/admin/sessions/:sessionId/block
-// @desc Block or Unblock a specific session
-router.route("/:sessionId/block").patch(toggleSessionBlockStatusAdmin);
+/**
+ * @route PATCH /api/v1/admin/sessions/:sessionId/status
+ * @description Manually update the status of a session.
+ * @access Admin
+ */
+router.patch("/:sessionId/status", updateSessionStatus);
 
-// @route GET /api/v1/admin/sessions/:sessionId/reviews
-// @desc Get all associated reviews (student, tutor, location) for a specific session
-router.route("/:sessionId/reviews").get(getSessionReviewsAdmin);
-
-// @route PATCH /api/v1/admin/sessions/:sessionId/status
-// @desc Manually update session status or resolve dispute
-router.route("/:sessionId/status").patch(updateSessionStatusAdmin);
+/**
+ * @route PATCH /api/v1/admin/sessions/:sessionId/block
+ * @description Block or unblock a session.
+ * @access Admin
+ */
+router.patch("/:sessionId/block", toggleSessionBlockStatus);
 
 export default router;
