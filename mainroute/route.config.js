@@ -55,8 +55,6 @@ router.use("/admin", adminRoutes);
 
 export default router;
 
-
-
 // import express from "express";
 // import authRoute from "../src/route/auth.route.js";
 // import userRoute from "../src/route/user.route.js";
@@ -96,6 +94,3 @@ export default router;
 // router.use("/withdrawals", withdrawalRouter);
 
 // export default router;
-
-
-
