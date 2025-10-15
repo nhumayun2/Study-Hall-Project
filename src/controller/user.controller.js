@@ -10,7 +10,7 @@ import { uploadOnCloudinary } from "../utils/commonMethod.js";
  */
 export const getMyProfile = catchAsync(async (req, res) => {
   const userId = req.user._id;
-
+  console.log("userId",userId)
   // The User model is now unified, so we fetch directly from it.
   const user = await User.findById(userId).select(
     "-password -refreshToken -verificationInfo -passwordResetToken"

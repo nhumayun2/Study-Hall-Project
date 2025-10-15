@@ -1,6 +1,5 @@
 import httpStatus from "http-status";
 import AppError from "../errors/AppError.js";
-// The following line had an incorrect path. It is now corrected from 'models' to 'model'.
 import { User } from "../model/user.model.js";
 import { createToken, verifyToken } from "../utils/authToken.js";
 import catchAsync from "../utils/catchAsync.js";
@@ -10,84 +9,39 @@ import sendResponse from "../utils/sendResponse.js";
 
 /**
  * @description Handles new user registration for all roles.
- * Creates a user, embeds minor information if provided, and sends a verification OTP.
  */
 export const register = catchAsync(async (req, res) => {
-  const {
-    name,
-    username,
-    email,
-    password,
-    confirmPassword,
-    gender,
-    dob,
-    role, // Student, Tutor, LocationOwner
-    minors, // Array of minor objects [{ name, gender, dob }]
-  } = req.body;
+  const { name, username, email, password, confirmPassword, gender, dob, role, minors } = req.body;
 
-  // --- 1. VALIDATION ---
   if (!name || !email || !password || !username || !gender || !dob || !role) {
-    throw new AppError(
-      httpStatus.BAD_REQUEST,
-      "Please fill in all required fields: name, username, email, password, gender, dob, and role."
-    );
+    throw new AppError(httpStatus.BAD_REQUEST, "Please fill in all required fields.");
   }
-
   if (password !== confirmPassword) {
     throw new AppError(httpStatus.FORBIDDEN, "Passwords do not match.");
   }
 
   const existingUser = await User.findOne({ $or: [{ email }, { username }] });
   if (existingUser) {
-    throw new AppError(
-      httpStatus.CONFLICT,
-      "A user with this email or username already exists."
-    );
+    throw new AppError(httpStatus.CONFLICT, "A user with this email or username already exists.");
   }
-
-  // --- 2. PREPARE USER DATA ---
-  const userData = {
-    name,
-    username,
-    email,
-    password,
-    gender,
-    dob,
-    role,
-    minors: Array.isArray(minors) ? minors : [],
-  };
-
-  // --- 3. GENERATE OTP AND TOKEN ---
+  
   const otp = generateOTP();
   const otpPayload = { otp, email };
-  const otpToken = createToken(
-    otpPayload,
-    process.env.OTP_SECRET,
-    process.env.OTP_EXPIRE
-  );
+  const otpToken = createToken(otpPayload, process.env.OTP_SECRET, process.env.OTP_EXPIRE);
 
-  userData.verificationInfo = { token: otpToken, verified: false };
+  const newUser = await User.create({
+    name, username, email, password, gender, dob, role,
+    minors: Array.isArray(minors) ? minors : [],
+    verificationInfo: { token: otpToken, verified: false },
+  });
 
-  // --- 4. CREATE USER ---
-  const newUser = await User.create(userData);
+  await sendEmail(newUser.email, "Verify Your Email Address", `Your verification code is: <strong>${otp}</strong>`);
 
-  // --- 5. SEND VERIFICATION EMAIL ---
-  await sendEmail(
-    newUser.email,
-    "Verify Your Email Address",
-    `Your 4-digit verification code is: <strong>${otp}</strong>`
-  );
-
-  // --- 6. SEND RESPONSE ---
   sendResponse(res, {
     statusCode: httpStatus.CREATED,
     success: true,
-    message:
-      "Registration successful! A verification code has been sent to your email.",
-    data: {
-      userId: newUser._id,
-      email: newUser.email,
-    },
+    message: "Registration successful! A verification code has been sent to your email.",
+    data: { userId: newUser._id, email: newUser.email },
   });
 });
 
@@ -98,66 +52,37 @@ export const login = catchAsync(async (req, res) => {
   const { email, password } = req.body;
 
   if (!email || !password) {
-    throw new AppError(
-      httpStatus.BAD_REQUEST,
-      "Email and password are required."
-    );
+    throw new AppError(httpStatus.BAD_REQUEST, "Email and password are required.");
   }
 
-  const user = await User.findOne({ email }).select("+password");
+  const user = await User.findOne({ email }).select("+password +verificationInfo.token +refreshToken");
 
-  if (!user || !(await user.isPasswordMatched(password, user.password))) {
+  // CORRECTED: This now correctly calls the isPasswordMatched method with one argument.
+  if (!user || !(await user.isPasswordMatched(password))) {
     throw new AppError(httpStatus.UNAUTHORIZED, "Invalid email or password.");
   }
-
   if (user.status !== "Active") {
-    throw new AppError(
-      httpStatus.FORBIDDEN,
-      `Your account is currently ${user.status}. Please contact support.`
-    );
+    throw new AppError(httpStatus.FORBIDDEN, `Your account is currently ${user.status}. Please contact support.`);
   }
 
   if (!user.verificationInfo.verified) {
     const otp = generateOTP();
-    const otpToken = createToken(
-      { otp, email: user.email },
-      process.env.OTP_SECRET,
-      process.env.OTP_EXPIRE
-    );
-
+    const otpToken = createToken({ otp, email: user.email }, process.env.OTP_SECRET, process.env.OTP_EXPIRE);
     user.verificationInfo.token = otpToken;
     await user.save({ validateBeforeSave: false });
-
-    await sendEmail(
-      user.email,
-      "Verify Your Email",
-      `Your new verification code is: <strong>${otp}</strong>`
-    );
-
+    await sendEmail(user.email, "Verify Your Email", `Your new verification code is: <strong>${otp}</strong>`);
+    
     return sendResponse(res, {
       statusCode: httpStatus.UNAUTHORIZED,
       success: false,
-      message:
-        "Your account is not verified. A new verification code has been sent to your email.",
-      data: {
-        userId: user._id,
-        email: user.email,
-      },
+      message: "Your account is not verified. A new verification code has been sent to your email.",
+      data: { userId: user._id, email: user.email },
     });
   }
 
   const tokenPayload = { _id: user._id, email: user.email, role: user.role };
-
-  const accessToken = createToken(
-    tokenPayload,
-    process.env.JWT_ACCESS_SECRET,
-    process.env.JWT_ACCESS_EXPIRES_IN
-  );
-  const refreshToken = createToken(
-    tokenPayload,
-    process.env.JWT_REFRESH_SECRET,
-    process.env.JWT_REFRESH_EXPIRES_IN
-  );
+  const accessToken = createToken(tokenPayload, process.env.JWT_ACCESS_SECRET, process.env.JWT_ACCESS_EXPIRES_IN);
+  const refreshToken = createToken(tokenPayload, process.env.JWT_REFRESH_SECRET, process.env.JWT_REFRESH_EXPIRES_IN);
 
   user.refreshToken = refreshToken;
   await user.save({ validateBeforeSave: false });
@@ -171,6 +96,7 @@ export const login = catchAsync(async (req, res) => {
   const userResponse = user.toObject();
   delete userResponse.password;
   delete userResponse.refreshToken;
+  delete userResponse.verificationInfo;
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
@@ -190,33 +116,21 @@ export const verifyEmail = catchAsync(async (req, res) => {
     throw new AppError(httpStatus.BAD_REQUEST, "Email and OTP are required.");
   }
 
-  const user = await User.findOne({ email });
+  const user = await User.findOne({ email }).select('+verificationInfo.token');
 
   if (!user) {
     throw new AppError(httpStatus.NOT_FOUND, "User not found.");
   }
   if (user.verificationInfo.verified) {
-    throw new AppError(
-      httpStatus.BAD_REQUEST,
-      "This account is already verified."
-    );
+    throw new AppError(httpStatus.BAD_REQUEST, "This account is already verified.");
   }
   if (!user.verificationInfo.token) {
-    throw new AppError(
-      httpStatus.BAD_REQUEST,
-      "No pending verification. Please try logging in again to get a new code."
-    );
+    throw new AppError(httpStatus.BAD_REQUEST, "No pending verification. Please try logging in again to get a new code.");
   }
 
-  const decoded = verifyToken(
-    user.verificationInfo.token,
-    process.env.OTP_SECRET
-  );
+  const decoded = verifyToken(user.verificationInfo.token, process.env.OTP_SECRET);
   if (String(decoded.otp) !== String(otp)) {
-    throw new AppError(
-      httpStatus.UNAUTHORIZED,
-      "The provided OTP is incorrect or has expired."
-    );
+    throw new AppError(httpStatus.UNAUTHORIZED, "The provided OTP is incorrect or has expired.");
   }
 
   user.verificationInfo.verified = true;
@@ -239,27 +153,16 @@ export const forgetPassword = catchAsync(async (req, res) => {
   const user = await User.findOne({ email });
 
   if (!user) {
-    throw new AppError(
-      httpStatus.NOT_FOUND,
-      "No user found with this email address."
-    );
+    throw new AppError(httpStatus.NOT_FOUND, "No user found with this email address.");
   }
 
   const otp = generateOTP();
-  const otpToken = createToken(
-    { otp, email },
-    process.env.OTP_SECRET,
-    process.env.OTP_EXPIRE
-  );
+  const otpToken = createToken({ otp, email }, process.env.OTP_SECRET, process.env.OTP_EXPIRE);
 
   user.passwordResetToken = otpToken;
   await user.save({ validateBeforeSave: false });
 
-  await sendEmail(
-    user.email,
-    "Password Reset Code",
-    `Your password reset code is: <strong>${otp}</strong>`
-  );
+  await sendEmail(user.email, "Password Reset Code", `Your password reset code is: <strong>${otp}</strong>`);
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
@@ -278,18 +181,12 @@ export const resetPassword = catchAsync(async (req, res) => {
   const user = await User.findOne({ email }).select("+passwordResetToken");
 
   if (!user || !user.passwordResetToken) {
-    throw new AppError(
-      httpStatus.BAD_REQUEST,
-      "Invalid or expired password reset request."
-    );
+    throw new AppError(httpStatus.BAD_REQUEST, "Invalid or expired password reset request.");
   }
 
   const decoded = verifyToken(user.passwordResetToken, process.env.OTP_SECRET);
   if (String(decoded.otp) !== String(otp)) {
-    throw new AppError(
-      httpStatus.UNAUTHORIZED,
-      "The provided code is incorrect or has expired."
-    );
+    throw new AppError(httpStatus.UNAUTHORIZED, "The provided code is incorrect or has expired.");
   }
 
   user.password = newPassword;
@@ -313,15 +210,13 @@ export const changePassword = catchAsync(async (req, res) => {
 
   const user = await User.findById(userId).select("+password");
 
-  if (!user || !(await user.isPasswordMatched(oldPassword, user.password))) {
-    throw new AppError(
-      httpStatus.UNAUTHORIZED,
-      "The old password is not correct."
-    );
+  // CORRECTED: This now correctly calls the isPasswordMatched method with one argument.
+  if (!user || !(await user.isPasswordMatched(oldPassword))) {
+    throw new AppError(httpStatus.UNAUTHORIZED, "The old password is not correct.");
   }
 
   user.password = newPassword;
-  await user.save(); // Pre-save hook will hash the new password
+  await user.save();
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
@@ -342,19 +237,14 @@ export const refreshToken = catchAsync(async (req, res) => {
   }
 
   const decoded = verifyToken(refreshToken, process.env.JWT_REFRESH_SECRET);
-
-  const user = await User.findById(decoded._id);
+  const user = await User.findById(decoded._id).select('+refreshToken');
 
   if (!user || user.refreshToken !== refreshToken) {
     throw new AppError(httpStatus.UNAUTHORIZED, "Invalid refresh token.");
   }
 
   const tokenPayload = { _id: user._id, email: user.email, role: user.role };
-  const accessToken = createToken(
-    tokenPayload,
-    process.env.JWT_ACCESS_SECRET,
-    process.env.JWT_ACCESS_EXPIRES_IN
-  );
+  const accessToken = createToken(tokenPayload, process.env.JWT_ACCESS_SECRET, process.env.JWT_ACCESS_EXPIRES_IN);
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
@@ -371,11 +261,7 @@ export const logout = catchAsync(async (req, res) => {
   const { refreshToken } = req.cookies;
 
   if (refreshToken) {
-    await User.findOneAndUpdate(
-      { refreshToken },
-      { refreshToken: "" },
-      { validateBeforeSave: false }
-    );
+    await User.findOneAndUpdate({ refreshToken }, { refreshToken: "" }, { validateBeforeSave: false });
   }
 
   res.clearCookie("refreshToken");
@@ -387,3 +273,4 @@ export const logout = catchAsync(async (req, res) => {
     data: null,
   });
 });
+

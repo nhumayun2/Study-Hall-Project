@@ -1,13 +1,9 @@
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
 
-/**
- * @description A unified schema for all user types in the application.
- * It includes embedded sub-documents for minors and role-specific profiles.
- */
 const userSchema = new mongoose.Schema(
   {
-    // --- CORE INFORMATION ---
+    // --- Core Information ---
     name: { type: String, required: true, trim: true },
     username: { type: String, required: true, unique: true, trim: true },
     email: {
@@ -18,15 +14,6 @@ const userSchema = new mongoose.Schema(
       trim: true,
     },
     password: { type: String, required: true, select: false },
-    avatar: {
-      public_id: { type: String },
-      url: { type: String },
-    },
-    gender: { type: String, enum: ["Male", "Female", "Other"] },
-    dob: { type: Date },
-
-    // --- ROLE & STATUS ---
-    // A single role field to be compatible with your existing auth middleware.
     role: {
       type: String,
       enum: ["Student", "Tutor", "LocationOwner", "Admin"],
@@ -35,74 +22,82 @@ const userSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["Active", "Inactive", "Blocked"],
+      enum: ["Active", "Inactive", "Blocked", "Pending"],
       default: "Active",
     },
+    avatar: {
+      public_id: { type: String, default: "" },
+      url: { type: String, default: "" },
+    },
 
-    // --- EMBEDDED SUB-DOCUMENTS ---
-    // For parents to manage their children's accounts. Replaces the separate Minor model.
+    // --- Personal Information ---
+    dob: { type: Date },
+    gender: { type: String, enum: ["Male", "Female", "Other"] },
+
+    // --- Embedded Minors for Parents ---
     minors: [
       {
         name: { type: String, required: true },
-        gender: { type: String, enum: ["Male", "Female", "Other"] },
         dob: { type: Date, required: true },
+        gender: { type: String },
+        _id: false,
       },
     ],
-    // Contains information specific to a user when they are a Tutor.
+
+    // --- Role-Specific Profiles ---
     tutorProfile: {
-      bio: { type: String },
+      bio: String,
+      experience: String,
+      educationLevel: String,
+      major: String,
+      categories: [mongoose.Schema.Types.ObjectId],
       isVerified: { type: Boolean, default: false },
-      // Other tutor-specific fields can be added here
+      rating: { type: Number, default: 0 },
+      totalReviews: { type: Number, default: 0 },
     },
-    // Contains information specific to a user when they own a location.
     locationOwnerProfile: {
-      businessName: { type: String },
+      businessName: String,
       isVerified: { type: Boolean, default: false },
-      // Other owner-specific fields can be added here
     },
 
-    // --- FINANCIAL INFORMATION ---
+    // --- Financial Information ---
     wallet: {
       balance: { type: Number, default: 0 },
+      pendingBalance: { type: Number, default: 0 },
     },
     beneficiaryInfo: {
-      bankName: { type: String },
-      accountNumber: { type: String },
-      accountHolder: { type: String },
+      bankName: String,
+      accountHolder: String,
+      accountNumber: String,
     },
     stripeAccountId: { type: String, select: false },
 
-    // --- AUTH & TOKENS ---
+    // --- Authentication & Security (Aligned with your original controller) ---
     verificationInfo: {
       verified: { type: Boolean, default: false },
-      token: { type: String, select: false },
+      token: { type: String },
     },
     passwordResetToken: { type: String, select: false },
     refreshToken: { type: String, select: false },
+    lastActive: { type: Date, default: Date.now },
   },
   {
     timestamps: true,
   }
 );
 
-// --- MIDDLEWARE ---
-// Hashes the password automatically before a user document is saved.
+// --- PASSWORD HASHING MIDDLEWARE ---
 userSchema.pre("save", async function (next) {
   if (this.isModified("password")) {
-    this.password = await bcrypt.hash(this.password, 12);
+    this.password = await bcrypt.hash(this.password, 10);
   }
   next();
 });
 
-// --- METHODS ---
-// Instance method to compare passwords during login.
-userSchema.methods.isPasswordMatched = async function (
-  candidatePassword,
-  hashedPassword
-) {
-  return await bcrypt.compare(candidatePassword, hashedPassword);
+// --- INSTANCE METHOD (from your original logic) ---
+// This method compares a candidate password with the user's hashed password.
+userSchema.methods.isPasswordMatched = async function (candidatePassword) {
+  return await bcrypt.compare(candidatePassword, this.password);
 };
 
-// --- EXPORT THE MODEL ---
-// This is the line that makes `import { User }` work.
 export const User = mongoose.model("User", userSchema);
