@@ -17,29 +17,49 @@ import { uploadOnCloudinary } from "../utils/commonMethod.js";
  */
 export const createLocation = catchAsync(async (req, res) => {
   const ownerId = req.user._id;
-  const {
+  // UPDATED: Expect address and location as JSON strings
+  let {
     name,
     address,
-    description,
     rules,
+    location,
+    description,
     noiseLevel,
     maxCapacity,
     type,
-    coordinates,
   } = req.body;
 
-  if (!name || !address || !maxCapacity || !type) {
+  // --- PARSE JSON STRINGS ---
+  // This is a robust way to handle complex objects alongside file uploads.
+  try {
+    if (address) address = JSON.parse(address);
+    if (location) location = JSON.parse(location);
+  } catch (error) {
     throw new AppError(
       httpStatus.BAD_REQUEST,
-      "Name, address, type, and max capacity are required."
+      "Invalid JSON format for address or location data."
+    );
+  }
+
+  if (
+    !name ||
+    !address ||
+    !address.street ||
+    !address.city ||
+    !address.state ||
+    !maxCapacity ||
+    !type
+  ) {
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      "Name, full address (street, city, state), type, and max capacity are required."
     );
   }
 
   let photos = [];
-  // CORRECTED: This now correctly handles the 'req.files' array from upload.array()
-  if (req.files && Array.isArray(req.files)) {
+  if (req.files && req.files.photos) {
     photos = await Promise.all(
-      req.files.map(async (file) => {
+      req.files.photos.map(async (file) => {
         const result = await uploadOnCloudinary(file.buffer);
         return { public_id: result.public_id, url: result.secure_url };
       })
@@ -50,14 +70,14 @@ export const createLocation = catchAsync(async (req, res) => {
     owner: ownerId,
     name,
     address,
-    description,
     rules,
+    location,
+    description,
     noiseLevel,
     maxCapacity,
     type,
-    coordinates,
     photos,
-    approvalStatus: "Pending", // All new locations must be approved by an admin
+    approvalStatus: "Pending",
     isActive: false,
   });
 
@@ -69,15 +89,19 @@ export const createLocation = catchAsync(async (req, res) => {
   });
 });
 
+// The rest of the controller functions remain the same...
+
 /**
  * @description LOCATION OWNER updates one of their existing locations.
- * @route PATCH /api/v1/locations/:locationId
- * @access LocationOwner
  */
 export const updateMyLocation = catchAsync(async (req, res) => {
   const ownerId = req.user._id;
   const { locationId } = req.params;
   const updates = req.body;
+
+  // Also parse JSON strings for updates
+  if (updates.address) updates.address = JSON.parse(updates.address);
+  if (updates.location) updates.location = JSON.parse(updates.location);
 
   const location = await Location.findOne({ _id: locationId, owner: ownerId });
   if (!location) {
@@ -87,11 +111,9 @@ export const updateMyLocation = catchAsync(async (req, res) => {
     );
   }
 
-  // Update fields
   Object.assign(location, updates);
 
-  // Invalidate approval if significant details are changed
-  if (updates.name || updates.address || updates.type) {
+  if (updates.address) {
     location.approvalStatus = "Pending";
     location.isActive = false;
   }
@@ -108,13 +130,10 @@ export const updateMyLocation = catchAsync(async (req, res) => {
 
 /**
  * @description LOCATION OWNER gets a list of all their locations.
- * @route GET /api/v1/locations/my-locations
- * @access LocationOwner
  */
 export const getMyLocations = catchAsync(async (req, res) => {
   const ownerId = req.user._id;
   const locations = await Location.find({ owner: ownerId });
-
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
@@ -123,27 +142,24 @@ export const getMyLocations = catchAsync(async (req, res) => {
   });
 });
 
-// ====================================================================
-// --- PUBLIC: VIEWING LOCATIONS ---
-// ====================================================================
-
 /**
- * @description ANY USER can get a list of all approved and active locations.
- * @route GET /api/v1/locations
- * @access Public
+ * @description ANY USER can get a list of all approved and active locations, with search.
  */
 export const getAllLocations = catchAsync(async (req, res) => {
-  const { searchTerm, noiseLevel, minCapacity } = req.query;
+  const { searchTerm, city, state, noiseLevel, minCapacity } = req.query;
   const query = {
     approvalStatus: "Approved",
     isActive: true,
   };
 
   if (searchTerm) {
-    query.$or = [
-      { name: { $regex: searchTerm, $options: "i" } },
-      { address: { $regex: searchTerm, $options: "i" } },
-    ];
+    query.name = { $regex: searchTerm, $options: "i" };
+  }
+  if (city) {
+    query["address.city"] = { $regex: `^${city}$`, $options: "i" };
+  }
+  if (state) {
+    query["address.state"] = { $regex: `^${state}$`, $options: "i" };
   }
   if (noiseLevel) {
     query.noiseLevel = noiseLevel;
@@ -153,7 +169,6 @@ export const getAllLocations = catchAsync(async (req, res) => {
   }
 
   const locations = await Location.find(query).populate("owner", "name avatar");
-
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
@@ -164,8 +179,6 @@ export const getAllLocations = catchAsync(async (req, res) => {
 
 /**
  * @description ANY USER can get the details of a single location.
- * @route GET /api/v1/locations/:locationId
- * @access Public
  */
 export const getLocationDetails = catchAsync(async (req, res) => {
   const { locationId } = req.params;
@@ -181,7 +194,6 @@ export const getLocationDetails = catchAsync(async (req, res) => {
       "Location not found or is not currently active."
     );
   }
-
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,

@@ -10,7 +10,7 @@ import { uploadOnCloudinary } from "../utils/commonMethod.js";
  */
 export const getMyProfile = catchAsync(async (req, res) => {
   const userId = req.user._id;
-  console.log("userId",userId)
+  console.log("userId", userId);
   // The User model is now unified, so we fetch directly from it.
   const user = await User.findById(userId).select(
     "-password -refreshToken -verificationInfo -passwordResetToken"
@@ -51,7 +51,10 @@ export const updateMyProfile = catchAsync(async (req, res) => {
     user.tutorProfile = { ...user.tutorProfile, ...tutorProfile };
   }
   if (user.role === "LocationOwner" && locationOwnerProfile) {
-    user.locationOwnerProfile = { ...user.locationOwnerProfile, ...locationOwnerProfile };
+    user.locationOwnerProfile = {
+      ...user.locationOwnerProfile,
+      ...locationOwnerProfile,
+    };
   }
 
   // --- 3. Handle avatar upload ---
@@ -89,7 +92,10 @@ export const addMinor = catchAsync(async (req, res) => {
   const { name, gender, dob } = req.body;
 
   if (!name || !dob) {
-    throw new AppError(httpStatus.BAD_REQUEST, "Minor's name and date of birth are required.");
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      "Minor's name and date of birth are required."
+    );
   }
 
   const user = await User.findById(parentId);
@@ -160,9 +166,9 @@ export const deleteMinor = catchAsync(async (req, res) => {
     throw new AppError(httpStatus.NOT_FOUND, "Minor not found for this user.");
   }
 
-  // Mongoose's pull method is perfect for removing items from an array
-  minor.remove();
-  
+  // CORRECTED: Use the .pull() method to remove the subdocument from the array.
+  user.minors.pull(minorId);
+
   await user.save({ validateBeforeSave: false });
 
   sendResponse(res, {
