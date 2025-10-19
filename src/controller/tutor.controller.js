@@ -13,8 +13,7 @@ import { uploadOnCloudinary } from "../utils/commonMethod.js";
  */
 export const applyToBeTutor = catchAsync(async (req, res) => {
   const userId = req.user._id;
-  const {
-    bio,
+  let {
     occupation,
     educationLevel,
     major,
@@ -52,15 +51,29 @@ export const applyToBeTutor = catchAsync(async (req, res) => {
     );
   }
 
-  // --- 2. PROCESS FILE UPLOADS ---
-  // Process KYC images
+  // --- 2. SAFELY PARSE categoriesToTeach ---
+  let parsedCategories = [];
+  if (categoriesToTeach) {
+    try {
+      parsedCategories = JSON.parse(categoriesToTeach);
+      if (!Array.isArray(parsedCategories)) {
+        throw new Error(); // Ensure it's an array
+      }
+    } catch (error) {
+      throw new AppError(
+        httpStatus.BAD_REQUEST,
+        'categoriesToTeach must be a valid JSON array string (e.g., \'["id1", "id2"]\').'
+      );
+    }
+  }
+
+  // --- 3. PROCESS FILE UPLOADS ---
   const [idFrontResult, idBackResult, selfieResult] = await Promise.all([
     uploadOnCloudinary(req.files.idFront[0].buffer),
     uploadOnCloudinary(req.files.idBack[0].buffer),
     uploadOnCloudinary(req.files.selfie[0].buffer),
   ]);
 
-  // Process supporting documents (if any)
   let supportingDocsData = [];
   if (
     req.files.supportingDocuments &&
@@ -74,15 +87,14 @@ export const applyToBeTutor = catchAsync(async (req, res) => {
     );
   }
 
-  // --- 3. CREATE THE APPLICATION DOCUMENT ---
+  // --- 4. CREATE THE APPLICATION DOCUMENT ---
   const newApplication = await TutorApplication.create({
     user: userId,
-    bio,
     occupation,
     educationLevel,
     major,
     experience,
-    categoriesToTeach: JSON.parse(categoriesToTeach), // Categories are sent as a JSON string array
+    categoriesToTeach: parsedCategories,
     kycDocuments: {
       idType,
       idFront: {

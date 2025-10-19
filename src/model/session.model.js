@@ -88,8 +88,7 @@ const sessionSchema = new mongoose.Schema(
         },
       },
     ],
-
-    // NEW: Replaced checkIn/checkOut with a more robust attendance array
+    
     attendance: [attendanceSchema],
 
     // Policies and Notes
@@ -107,6 +106,7 @@ const sessionSchema = new mongoose.Schema(
 
     // Financials
     paymentIntentId: { type: String },
+    checkOutToken: { type: String, select: false },
     adminCommission: { type: Number, default: 0 },
     tutorEarnings: { type: Number, default: 0 },
     locationOwnerEarnings: { type: Number, default: 0 },
@@ -114,36 +114,6 @@ const sessionSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Middleware to calculate profit distribution when session is marked as Completed
-sessionSchema.pre("save", async function (next) {
-  // Trigger calculation only when the status is changed to 'Completed' and price is > 0
-  if (
-    this.isModified("status") &&
-    this.status === "Completed" &&
-    this.price > 0
-  ) {
-    try {
-      const settings = await Settings.getSettings();
-      // Price is per student, so total revenue is price * number of attendees
-      const totalAmount =
-        this.price * this.attendance.filter((a) => a.checkIn.timestamp).length;
-
-      const platformRate = settings.profitDistribution.platform / 100;
-      const tutorRate = settings.profitDistribution.tutor / 100;
-      const locationOwnerRate = settings.profitDistribution.locationOwner / 100;
-
-      this.adminCommission = parseFloat(
-        (totalAmount * platformRate).toFixed(2)
-      );
-      this.tutorEarnings = parseFloat((totalAmount * tutorRate).toFixed(2));
-      this.locationOwnerEarnings = parseFloat(
-        (totalAmount * locationOwnerRate).toFixed(2)
-      );
-    } catch (error) {
-      console.error("Error calculating profit distribution:", error);
-    }
-  }
-  next();
-});
+// --- The pre-save hook has been REMOVED from this model ---
 
 export const Session = mongoose.model("Session", sessionSchema);

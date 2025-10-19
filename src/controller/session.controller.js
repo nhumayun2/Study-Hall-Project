@@ -5,6 +5,7 @@ import sendResponse from "../utils/sendResponse.js";
 import catchAsync from "../utils/catchAsync.js";
 import { Session } from "../model/session.model.js";
 import { User } from "../model/user.model.js";
+import { Location } from "../model/location.model.js";
 import { Transaction } from "../model/transaction.model.js";
 import { uploadOnCloudinary } from "../utils/commonMethod.js";
 import { createToken, verifyToken } from "../utils/authToken.js";
@@ -12,6 +13,7 @@ import {
   capturePaymentIntent,
   releasePaymentIntent,
   createPaymentIntent,
+  confirmPaymentIntent,
 } from "../utils/Stripe.service.js";
 import QRCode from "qrcode";
 
@@ -31,45 +33,48 @@ const _captureSessionPayment = async (session) => {
   if (!session.paymentIntentId) return;
 
   try {
+    // 1. Capture the payment via Stripe
     await capturePaymentIntent(session.paymentIntentId);
 
-    // Create a transaction record for this successful payment
+    // Use the length of enrolledStudents for the amount calculation
+    const numberOfAttendees = session.enrolledStudents.length || 1;
+
+    // 2. Create a transaction record for auditing
     await Transaction.create({
-      user: session.creator, // The student who paid
+      user: session.creator,
       type: "Payment",
-      amount: session.price * session.attendance.length,
+      amount: session.price * numberOfAttendees,
       status: "Completed",
-      paymentGateway: "Stripe",
       paymentGatewayId: session.paymentIntentId,
       description: `Payment captured for session: ${session.title}`,
       relatedSession: session._id,
     });
 
-    // Update the tutor's and location owner's wallet balances
-    const tutor = await User.findById(session.acceptedTutor);
-    if (tutor && session.tutorEarnings > 0) {
-      tutor.wallet.balance =
-        (tutor.wallet.balance || 0) + session.tutorEarnings;
-      await tutor.save({ validateBeforeSave: false });
+    // 3. Update Tutor's wallet using atomic increment
+    if (session.acceptedTutor && session.tutorEarnings > 0) {
+      await User.findByIdAndUpdate(session.acceptedTutor, {
+        $inc: { "wallet.balance": session.tutorEarnings },
+      });
+      console.log(
+        `Instructed DB to increment tutor wallet by ${session.tutorEarnings}`
+      );
     }
 
-    const location = await Location.findById(session.location).populate(
-      "owner"
-    );
+    // 4. Update Location Owner's wallet using atomic increment
+    const location = await Location.findById(session.location);
     if (location && location.owner && session.locationOwnerEarnings > 0) {
-      const owner = await User.findById(location.owner);
-      if (owner) {
-        owner.wallet.balance =
-          (owner.wallet.balance || 0) + session.locationOwnerEarnings;
-        await owner.save({ validateBeforeSave: false });
-      }
+      await User.findByIdAndUpdate(location.owner, {
+        $inc: { "wallet.balance": session.locationOwnerEarnings },
+      });
+      console.log(
+        `Instructed DB to increment owner wallet by ${session.locationOwnerEarnings}`
+      );
     }
   } catch (error) {
-    console.error("Stripe Payment Capture Failed:", error);
-    // If capture fails, we should not change the session status to Completed
+    console.error("Stripe Payment Capture or Wallet Update Failed:", error);
     throw new AppError(
       httpStatus.INTERNAL_SERVER_ERROR,
-      `Payment capture failed: ${error.message}.`
+      `Payment processing failed: ${error.message}.`
     );
   }
 };
@@ -124,7 +129,7 @@ export const createSessionRequest = catchAsync(async (req, res) => {
 export const acceptTutorOffer = catchAsync(async (req, res) => {
   const studentId = req.user._id;
   const { sessionId } = req.params;
-  const { tutorId, paymentIntentId } = req.body; // Expect paymentIntentId from frontend
+  const { tutorId, paymentIntentId } = req.body;
 
   const session = await Session.findById(sessionId);
 
@@ -138,11 +143,6 @@ export const acceptTutorOffer = catchAsync(async (req, res) => {
       httpStatus.BAD_REQUEST,
       "Session is not awaiting tutor selection."
     );
-  if (session.price > 0 && !paymentIntentId)
-    throw new AppError(
-      httpStatus.BAD_REQUEST,
-      "Payment pre-authorization is required to accept a tutor."
-    );
 
   const applicant = session.tutorApplicants.find(
     (app) => app.tutorId.toString() === tutorId
@@ -153,19 +153,31 @@ export const acceptTutorOffer = catchAsync(async (req, res) => {
       "The selected tutor has not applied to this session."
     );
 
-  session.acceptedTutor = tutorId;
-  session.status = "Booked";
-  session.price = applicant.offerPrice;
-  session.paymentIntentId = paymentIntentId;
-  session.enrolledStudents.push(studentId);
+  if (applicant.offerPrice > 0 && !paymentIntentId) {
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      "Payment pre-authorization ID is required to accept a paid offer."
+    );
+  }
 
-  await session.save();
+  // Use findByIdAndUpdate for a more reliable save
+  const updatedSession = await Session.findByIdAndUpdate(
+    sessionId,
+    {
+      acceptedTutor: tutorId,
+      status: "Booked",
+      price: applicant.offerPrice,
+      paymentIntentId: paymentIntentId || null,
+      $push: { enrolledStudents: studentId },
+    },
+    { new: true }
+  );
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
     message: "Tutor accepted. The session is now booked.",
-    data: session,
+    data: updatedSession,
   });
 });
 
@@ -178,7 +190,7 @@ export const acceptTutorOffer = catchAsync(async (req, res) => {
  */
 export const createSessionOffer = catchAsync(async (req, res) => {
   const tutorId = req.user._id;
-  const {
+  let {
     title,
     description,
     category,
@@ -189,11 +201,38 @@ export const createSessionOffer = catchAsync(async (req, res) => {
     maxStudents,
     location,
     cancellationPolicy,
-    tutorNote,
   } = req.body;
+
+  try {
+    if (schedule && typeof schedule === "string") {
+      schedule = JSON.parse(schedule);
+    } else if (typeof schedule !== "object") {
+      throw new Error("Schedule data is missing or not a valid object/string.");
+    }
+  } catch (e) {
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      `Invalid JSON format for schedule data: ${e.message}`
+    );
+  }
 
   if (!req.file)
     throw new AppError(httpStatus.BAD_REQUEST, "A cover photo is required.");
+  if (
+    !title ||
+    !category ||
+    !schedule ||
+    !schedule.date ||
+    !schedule.startTime ||
+    !schedule.duration ||
+    price === undefined ||
+    !location
+  ) {
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      "Missing required fields for session offer (including schedule details)."
+    );
+  }
 
   const coverPhotoResult = await uploadOnCloudinary(req.file.buffer);
 
@@ -212,7 +251,6 @@ export const createSessionOffer = catchAsync(async (req, res) => {
     maxStudents,
     location,
     cancellationPolicy,
-    tutorNote,
     coverPhoto: {
       public_id: coverPhotoResult.public_id,
       url: coverPhotoResult.secure_url,
@@ -222,7 +260,7 @@ export const createSessionOffer = catchAsync(async (req, res) => {
   sendResponse(res, {
     statusCode: httpStatus.CREATED,
     success: true,
-    message: "Session offer created and is now available for booking.",
+    message: "Session offer created.",
     data: newSessionOffer,
   });
 });
@@ -237,38 +275,54 @@ export const bookSessionOffer = catchAsync(async (req, res) => {
 
   const session = await Session.findById(sessionId);
 
-  if (!session || session.type !== "Offer" || session.status !== "Active")
+  if (
+    !session ||
+    session.type !== "Offer" ||
+    !["Active", "Booked"].includes(session.status)
+  ) {
     throw new AppError(
       httpStatus.NOT_FOUND,
       "This session is not available for booking."
     );
-  if (session.enrolledStudents.length >= session.maxStudents)
+  }
+  if (session.enrolledStudents.length >= session.maxStudents) {
     throw new AppError(httpStatus.BAD_REQUEST, "This session is already full.");
-  if (session.enrolledStudents.includes(studentId))
+  }
+  if (
+    session.enrolledStudents.some(
+      (id) => id.toString() === studentId.toString()
+    )
+  ) {
     throw new AppError(
       httpStatus.BAD_REQUEST,
       "You are already enrolled in this session."
     );
-  if (session.price > 0 && !paymentIntentId)
-    throw new AppError(
-      httpStatus.BAD_REQUEST,
-      "Payment pre-authorization is required to book this session."
-    );
-
-  session.enrolledStudents.push(studentId);
-  session.paymentIntentId = paymentIntentId;
-
-  if (session.enrolledStudents.length >= session.maxStudents) {
-    session.status = "Booked";
   }
 
-  await session.save();
+  if (session.price > 0 && !paymentIntentId) {
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      "Payment pre-authorization ID is required."
+    );
+  }
+
+  // --- THIS IS THE FIX ---
+  // Use findByIdAndUpdate with $push for a guaranteed atomic update.
+  const updatedSession = await Session.findByIdAndUpdate(
+    sessionId,
+    {
+      paymentIntentId: paymentIntentId || null,
+      status: "Booked",
+      $push: { enrolledStudents: studentId },
+    },
+    { new: true }
+  ); // {new: true} returns the updated document
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
     message: "You have successfully booked the session.",
-    data: session,
+    data: updatedSession,
   });
 });
 
@@ -328,7 +382,10 @@ export const applyToSessionRequest = catchAsync(async (req, res) => {
  */
 export const preauthorizeSessionPayment = catchAsync(async (req, res) => {
   const { sessionId } = req.params;
-  const session = await Session.findById(sessionId).populate("acceptedTutor");
+  const session = await Session.findById(sessionId).populate({
+    path: "acceptedTutor",
+    select: "+stripeAccountId",
+  });
 
   if (!session) throw new AppError(httpStatus.NOT_FOUND, "Session not found.");
   if (session.price <= 0)
@@ -336,22 +393,60 @@ export const preauthorizeSessionPayment = catchAsync(async (req, res) => {
       httpStatus.BAD_REQUEST,
       "This session is free and does not require payment."
     );
-  if (!session.acceptedTutor?.stripeAccountId)
-    throw new AppError(
-      httpStatus.BAD_REQUEST,
-      "The tutor is not configured to receive payments."
+
+  let tutorStripeId;
+  let finalPrice;
+
+  if (session.type === "Offer") {
+    if (!session.acceptedTutor?.stripeAccountId) {
+      throw new AppError(
+        httpStatus.BAD_REQUEST,
+        "The tutor is not configured to receive payments."
+      );
+    }
+    tutorStripeId = session.acceptedTutor.stripeAccountId;
+    finalPrice = session.price;
+  } else if (session.type === "Request") {
+    const { tutorId } = req.body;
+    if (!tutorId) {
+      throw new AppError(
+        httpStatus.BAD_REQUEST,
+        "Tutor ID is required to pre-authorize payment for a session request."
+      );
+    }
+    const tutor = await User.findById(tutorId).select("+stripeAccountId");
+    const applicant = session.tutorApplicants.find(
+      (app) => app.tutorId.toString() === tutorId
     );
 
+    if (!tutor || !tutor.stripeAccountId) {
+      throw new AppError(
+        httpStatus.BAD_REQUEST,
+        "The selected tutor is not configured to receive payments."
+      );
+    }
+    if (!applicant) {
+      throw new AppError(
+        httpStatus.NOT_FOUND,
+        "This tutor has not applied to the session."
+      );
+    }
+    tutorStripeId = tutor.stripeAccountId;
+    finalPrice = applicant.offerPrice;
+  } else {
+    throw new AppError(httpStatus.BAD_REQUEST, "Invalid session type.");
+  }
+
   const { clientSecret, paymentIntentId } = await createPaymentIntent(
-    session.price,
-    session.acceptedTutor.stripeAccountId
+    finalPrice,
+    tutorStripeId
   );
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
     message: "Payment intent created successfully.",
-    data: { clientSecret, paymentIntentId },
+    data: { clientSecret, paymentIntentId, finalPrice },
   });
 });
 
@@ -390,7 +485,6 @@ export const cancelSession = catchAsync(async (req, res) => {
     timestamp: new Date(),
   };
 
-  // Release the pre-authorized payment
   if (session.paymentIntentId) {
     await releasePaymentIntent(session.paymentIntentId);
   }
@@ -441,11 +535,16 @@ export const studentGenerateCheckInQR = catchAsync(async (req, res) => {
     CHECK_TOKEN_EXPIRE
   );
 
-  // Create or update attendance record with the token
   let attendanceRecord = session.attendance.find(
     (a) => a.student.toString() === studentId.toString()
   );
   if (attendanceRecord) {
+    if (attendanceRecord.checkIn.timestamp) {
+      throw new AppError(
+        httpStatus.BAD_REQUEST,
+        "You have already checked in."
+      );
+    }
     attendanceRecord.checkIn.token = token;
   } else {
     session.attendance.push({ student: studentId, checkIn: { token } });
@@ -457,7 +556,7 @@ export const studentGenerateCheckInQR = catchAsync(async (req, res) => {
     statusCode: httpStatus.OK,
     success: true,
     message: "Check-in QR Code generated.",
-    data: { qrCodeImage },
+    data: { qrCodeImage, token_for_testing: token },
   });
 });
 
@@ -495,10 +594,16 @@ export const tutorScanCheckInQR = catchAsync(async (req, res) => {
   if (!attendanceRecord || attendanceRecord.checkIn.token !== token)
     throw new AppError(httpStatus.BAD_REQUEST, "Invalid or outdated QR code.");
 
+  if (attendanceRecord.checkIn.timestamp) {
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      "This student has already been checked in."
+    );
+  }
+
   attendanceRecord.checkIn.timestamp = new Date();
   attendanceRecord.checkIn.token = null;
 
-  // First student to check in changes the session status to Ongoing
   if (session.status === "Booked") {
     session.status = "Ongoing";
   }
@@ -518,18 +623,20 @@ export const tutorScanCheckInQR = catchAsync(async (req, res) => {
 export const tutorGenerateCheckOutQR = catchAsync(async (req, res) => {
   const tutorId = req.user._id;
   const { sessionId } = req.params;
-  const session = await Session.findById(sessionId);
+  const session = await Session.findById(sessionId).select("+checkOutToken");
 
-  if (!session || session.acceptedTutor?.toString() !== tutorId.toString())
+  if (!session || session.acceptedTutor?.toString() !== tutorId.toString()) {
     throw new AppError(
       httpStatus.FORBIDDEN,
       "Session not found or you are not the tutor."
     );
-  if (session.status !== "Ongoing")
+  }
+  if (session.status !== "Ongoing") {
     throw new AppError(
       httpStatus.BAD_REQUEST,
       `Session must be 'Ongoing' to generate a check-out code.`
     );
+  }
 
   const tokenPayload = { sessionId, type: "checkOut" };
   const token = createToken(
@@ -538,13 +645,16 @@ export const tutorGenerateCheckOutQR = catchAsync(async (req, res) => {
     CHECK_TOKEN_EXPIRE
   );
 
-  // No need to save token on session, it's a universal checkout token for this session
+  session.checkOutToken = token;
+  await session.save();
+
   const qrCodeImage = await QRCode.toDataURL(token);
+
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
     message: "Check-out QR Code generated for all students.",
-    data: { qrCodeImage },
+    data: { qrCodeImage, token_for_testing: token },
   });
 });
 
@@ -564,7 +674,7 @@ export const studentScanCheckOutQR = catchAsync(async (req, res) => {
       "Invalid token type for check-out."
     );
 
-  const session = await Session.findById(sessionId);
+  const session = await Session.findById(sessionId).select("+checkOutToken");
   if (
     !session ||
     !session.enrolledStudents.some(
@@ -580,6 +690,12 @@ export const studentScanCheckOutQR = catchAsync(async (req, res) => {
       httpStatus.BAD_REQUEST,
       `Session must be 'Ongoing' to check out.`
     );
+  if (session.checkOutToken !== token) {
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      "Invalid or expired check-out token. Please ask the tutor to generate a new one."
+    );
+  }
 
   let attendanceRecord = session.attendance.find(
     (a) => a.student.toString() === studentId.toString()
@@ -594,16 +710,17 @@ export const studentScanCheckOutQR = catchAsync(async (req, res) => {
 
   attendanceRecord.checkOut.timestamp = new Date();
 
-  // Check if this is the last student to check out
   const allCheckedInStudents = session.attendance.filter(
     (a) => a.checkIn.timestamp
   );
   const allCheckedOut = allCheckedInStudents.every((a) => a.checkOut.timestamp);
 
   if (allCheckedOut) {
-    // This is the last student, trigger payment capture and complete the session
-    await _captureSessionPayment(session);
+    if (session.price > 0) {
+      await _captureSessionPayment(session);
+    }
     session.status = "Completed";
+    session.checkOutToken = undefined;
   }
 
   await session.save();
@@ -669,6 +786,7 @@ export const getSessionDetails = catchAsync(async (req, res) => {
     { path: "enrolledStudents", select: "name avatar" },
     { path: "location" },
     { path: "category", select: "name" },
+    { path: "tutorApplicants.tutorId", select: "name avatar tutorProfile" },
   ]);
   if (!session) {
     throw new AppError(httpStatus.NOT_FOUND, "Session not found.");
@@ -698,5 +816,51 @@ export const getMySessions = catchAsync(async (req, res) => {
     success: true,
     message: "Your sessions have been fetched successfully.",
     data: sessions,
+  });
+});
+
+// ====================================================================
+// --- NEW: ADMIN DEBUGGING CONTROLLER ---
+// ====================================================================
+export const adminManualCapture = catchAsync(async (req, res) => {
+  const { sessionId } = req.params;
+
+  const session = await Session.findById(sessionId);
+  if (!session) {
+    throw new AppError(httpStatus.NOT_FOUND, "Session not found.");
+  }
+  if (session.status !== "Booked") {
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      `Session must be in 'Booked' status to be manually completed. Current status: ${session.status}`
+    );
+  }
+
+  // Manually add the student to attendance for calculation purposes
+  if (session.enrolledStudents.length > 0 && session.attendance.length === 0) {
+    session.enrolledStudents.forEach((studentId) => {
+      session.attendance.push({
+        student: studentId,
+        checkIn: { timestamp: new Date() },
+        checkOut: { timestamp: new Date() },
+      });
+    });
+  }
+
+  // Trigger the payment capture and wallet update
+  if (session.price > 0) {
+    await _captureSessionPayment(session);
+  }
+
+  // Complete the session
+  session.status = "Completed";
+  await session.save();
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message:
+      "Session manually completed, payment captured, and wallets updated.",
+    data: session,
   });
 });

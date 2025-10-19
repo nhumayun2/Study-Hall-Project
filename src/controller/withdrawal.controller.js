@@ -28,14 +28,24 @@ export const requestWithdrawal = catchAsync(async (req, res) => {
   }
 
   const settings = await Settings.getSettings();
-  if (amount < settings.minWithdrawalAmount) {
+  // FIX: Path was incorrect, should be nested under withdrawalLimits
+  if (amount < settings.withdrawalLimits.min) {
     throw new AppError(
       httpStatus.BAD_REQUEST,
-      `Minimum withdrawal amount is $${settings.minWithdrawalAmount}.`
+      `Minimum withdrawal amount is $${settings.withdrawalLimits.min}.`
     );
   }
 
   const user = await User.findById(userId);
+
+  // --- DEBUGGING STEP ---
+  console.log("--- DEBUG: Checking wallet balance for withdrawal ---");
+  console.log(`User: ${user.name} (${user._id})`);
+  console.log("Wallet details:", user.wallet);
+  console.log(`Requested Amount: ${amount}`);
+  console.log("----------------------------------------------------");
+  // --- END DEBUGGING STEP ---
+
   if (user.wallet.balance < amount) {
     throw new AppError(
       httpStatus.BAD_REQUEST,

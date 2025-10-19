@@ -4,6 +4,7 @@ import AppError from "../errors/AppError.js";
 import { protect, isStudent } from "../middleware/auth.middleware.js";
 import {
   createPaymentIntentForSession,
+  confirmPayment, // <-- Import the new function
   requestWithdrawal,
   getFinancialOverview,
   getTransactionHistory,
@@ -37,6 +38,18 @@ router.post(
   protect,
   isStudent,
   createPaymentIntentForSession
+);
+
+/**
+ * @route POST /api/v1/financials/confirm-payment
+ * @description Confirms a pre-authorized payment intent.
+ * @access Student
+ */
+router.post(
+  "/confirm-payment", // <-- The new route
+  protect,
+  isStudent,
+  confirmPayment
 );
 
 // ====================================================================

@@ -10,7 +10,7 @@ const tutorApplicationSchema = new mongoose.Schema(
     },
 
     // --- Professional Information ---
-    bio: { type: String },
+    //bio: { type: String },
     occupation: { type: String, required: true },
     educationLevel: { type: String, required: true },
     major: { type: String, required: true },

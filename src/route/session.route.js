@@ -20,8 +20,15 @@ import {
   tutorScanCheckInQR,
   tutorGenerateCheckOutQR,
   studentScanCheckOutQR,
+  // --- NEW DEBUGGING ROUTE ---
+  adminManualCapture,
 } from "../controller/session.controller.js";
-import { protect, isStudent, isTutor } from "../middleware/auth.middleware.js";
+import {
+  protect,
+  isStudent,
+  isTutor,
+  isAdmin, // Import isAdmin
+} from "../middleware/auth.middleware.js";
 import upload from "../middleware/multer.middleware.js";
 
 const router = express.Router();
@@ -96,5 +103,15 @@ router.get(
   tutorGenerateCheckOutQR
 );
 router.post("/check-out/scan", protect, isStudent, studentScanCheckOutQR);
+
+// ====================================================================
+// --- NEW: ADMIN DEBUGGING ROUTE ---
+// ====================================================================
+/**
+ * @route POST /api/v1/sessions/:sessionId/manual-capture
+ * @description Manually captures payment and completes a session for debugging.
+ * @access Admin
+ */
+router.post("/:sessionId/manual-capture", protect, isAdmin, adminManualCapture);
 
 export default router;

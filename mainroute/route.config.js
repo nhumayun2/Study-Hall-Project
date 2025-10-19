@@ -14,6 +14,7 @@ import chatRoutes from "../src/route/chat.route.js";
 import reportRoutes from "../src/route/report.route.js";
 import notificationRoutes from "../src/route/notification.route.js";
 import adminRoutes from "../src/route/admin.route.js";
+import onboardingRoutes from "../src/route/onboarding.route.js";
 
 const router = express.Router();
 
@@ -33,6 +34,7 @@ router.use("/reviews", reviewRoutes);
 // Financials
 router.use("/financials", financialRoutes);
 router.use("/withdrawals", withdrawalRoutes);
+router.use("/onboarding", onboardingRoutes);
 
 // Tutor Specific Processes
 router.use("/tutors", tutorRoutes); // Handles the "apply to be a tutor" process
@@ -46,12 +48,10 @@ router.use("/notifications", notificationRoutes);
 // Admin Panel Hub
 router.use("/admin", adminRoutes);
 
-
 // --- The following routes are now obsolete and have been removed ---
 // router.use("/courses", courseRouter);
 // router.use("/tutor/courses", tutorCourseRouter);
 // router.use("/minors", minorRoute);
-
 
 export default router;
 

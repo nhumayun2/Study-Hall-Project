@@ -10,10 +10,8 @@ import { uploadOnCloudinary } from "../utils/commonMethod.js";
  */
 export const getMyProfile = catchAsync(async (req, res) => {
   const userId = req.user._id;
-  console.log("userId", userId);
-  // The User model is now unified, so we fetch directly from it.
   const user = await User.findById(userId).select(
-    "-password -refreshToken -verificationInfo -passwordResetToken"
+    "-password -refreshToken -verificationToken -passwordResetToken -isVerified"
   );
 
   if (!user) {
@@ -30,7 +28,6 @@ export const getMyProfile = catchAsync(async (req, res) => {
 
 /**
  * @description Update the profile of the currently authenticated user.
- * Handles general info, role-specific profiles, and avatar uploads.
  */
 export const updateMyProfile = catchAsync(async (req, res) => {
   const userId = req.user._id;
@@ -41,13 +38,10 @@ export const updateMyProfile = catchAsync(async (req, res) => {
     throw new AppError(httpStatus.NOT_FOUND, "User not found.");
   }
 
-  // --- 1. Update general user information ---
   if (name) user.name = name;
   if (dob) user.dob = dob;
 
-  // --- 2. Update role-specific profiles (if the user has the role) ---
   if (user.role === "Tutor" && tutorProfile) {
-    // Merge updates into the existing tutorProfile to avoid overwriting.
     user.tutorProfile = { ...user.tutorProfile, ...tutorProfile };
   }
   if (user.role === "LocationOwner" && locationOwnerProfile) {
@@ -57,7 +51,6 @@ export const updateMyProfile = catchAsync(async (req, res) => {
     };
   }
 
-  // --- 3. Handle avatar upload ---
   if (req.file) {
     const result = await uploadOnCloudinary(req.file.buffer);
     user.avatar = {
@@ -66,7 +59,7 @@ export const updateMyProfile = catchAsync(async (req, res) => {
     };
   }
 
-  await user.save({ validateBeforeSave: false }); // Bypass validation for partial updates
+  await user.save({ validateBeforeSave: false });
 
   const updatedUser = user.toObject();
   delete updatedUser.password;
@@ -81,12 +74,43 @@ export const updateMyProfile = catchAsync(async (req, res) => {
 });
 
 // ====================================================================
-// --- MINOR MANAGEMENT CONTROLLERS (Formerly in minor.controller.js) ---
+// --- NEW: BENEFICIARY & FINANCIAL INFO MANAGEMENT ---
 // ====================================================================
-
 /**
- * @description Add a new minor to the authenticated user's profile.
+ * @description Allows a Tutor or Location Owner to update their payment info.
  */
+export const updateBeneficiaryInfo = catchAsync(async (req, res) => {
+  const userId = req.user._id;
+  const { bankName, accountNumber, accountHolder, stripeAccountId } = req.body;
+
+  if (!bankName || !accountNumber || !accountHolder || !stripeAccountId) {
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      "All beneficiary fields, including Stripe Account ID, are required."
+    );
+  }
+
+  const user = await User.findById(userId);
+  if (!user) {
+    throw new AppError(httpStatus.NOT_FOUND, "User not found.");
+  }
+
+  user.beneficiaryInfo = { bankName, accountNumber, accountHolder };
+  user.stripeAccountId = stripeAccountId;
+
+  await user.save({ validateBeforeSave: false });
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Beneficiary information updated successfully.",
+    data: user,
+  });
+});
+
+// ====================================================================
+// --- MINOR MANAGEMENT CONTROLLERS ---
+// ====================================================================
 export const addMinor = catchAsync(async (req, res) => {
   const parentId = req.user._id;
   const { name, gender, dob } = req.body;
@@ -103,21 +127,16 @@ export const addMinor = catchAsync(async (req, res) => {
     throw new AppError(httpStatus.NOT_FOUND, "Parent user not found.");
   }
 
-  // Add the new minor to the embedded array. Mongoose handles the validation.
   user.minors.push({ name, gender, dob });
   await user.save({ validateBeforeSave: false });
 
   sendResponse(res, {
-    statusCode: httpStatus.CREATED,
+    statusCode: httpStatus.OK,
     success: true,
     message: "Minor added successfully.",
-    data: user.minors[user.minors.length - 1], // Return the newly added minor
+    data: user.minors[user.minors.length - 1],
   });
 });
-
-/**
- * @description Update an existing minor's details.
- */
 export const updateMinor = catchAsync(async (req, res) => {
   const parentId = req.user._id;
   const { minorId } = req.params;
@@ -128,13 +147,11 @@ export const updateMinor = catchAsync(async (req, res) => {
     throw new AppError(httpStatus.NOT_FOUND, "User not found.");
   }
 
-  // Find the specific minor in the array by its _id
   const minor = user.minors.id(minorId);
   if (!minor) {
     throw new AppError(httpStatus.NOT_FOUND, "Minor not found for this user.");
   }
 
-  // Update fields
   if (name) minor.name = name;
   if (gender) minor.gender = gender;
   if (dob) minor.dob = dob;
@@ -148,10 +165,6 @@ export const updateMinor = catchAsync(async (req, res) => {
     data: minor,
   });
 });
-
-/**
- * @description Delete a minor from the user's profile.
- */
 export const deleteMinor = catchAsync(async (req, res) => {
   const parentId = req.user._id;
   const { minorId } = req.params;
@@ -166,9 +179,7 @@ export const deleteMinor = catchAsync(async (req, res) => {
     throw new AppError(httpStatus.NOT_FOUND, "Minor not found for this user.");
   }
 
-  // CORRECTED: Use the .pull() method to remove the subdocument from the array.
   user.minors.pull(minorId);
-
   await user.save({ validateBeforeSave: false });
 
   sendResponse(res, {

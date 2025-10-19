@@ -2,6 +2,7 @@ import express from "express";
 import {
   getMyProfile,
   updateMyProfile,
+  updateBeneficiaryInfo, // <-- Import the new function
   addMinor,
   updateMinor,
   deleteMinor,
@@ -11,22 +12,24 @@ import upload from "../middleware/multer.middleware.js";
 
 const router = express.Router();
 
+// All routes in this file are protected and require the user to be logged in.
+router.use(protect);
+
 // --- Profile Management Routes ---
-router.get("/me", protect, getMyProfile); // Renamed route for clarity
-router.patch(
-  "/me/update", // Renamed route for clarity
-  protect,
-  upload.single("avatar"),
-  updateMyProfile
-);
+router.get("/me", getMyProfile);
+router.patch("/me/update", upload.single("avatar"), updateMyProfile);
+
+// --- NEW: Beneficiary Information Route ---
+/**
+ * @route PATCH /api/v1/users/me/beneficiary
+ * @description Allows a user to update their payment/beneficiary info.
+ * @access Authenticated (Tutor or LocationOwner)
+ */
+router.patch("/me/beneficiary", updateBeneficiaryInfo);
 
 // --- Minor Management Routes ---
-// These routes are new and correspond to the functions we added to user.controller.js
-router.post("/me/minors", protect, addMinor);
-router.patch("/me/minors/:minorId", protect, updateMinor);
-router.delete("/me/minors/:minorId", protect, deleteMinor);
-
-// The '/change-password' route has been removed from this file.
-// It is now correctly located in 'auth.route.js'.
+router.post("/me/minors", addMinor);
+router.patch("/me/minors/:minorId", updateMinor);
+router.delete("/me/minors/:minorId", deleteMinor);
 
 export default router;
