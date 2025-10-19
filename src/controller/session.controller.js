@@ -7,6 +7,7 @@ import { Session } from "../model/session.model.js";
 import { User } from "../model/user.model.js";
 import { Location } from "../model/location.model.js";
 import { Transaction } from "../model/transaction.model.js";
+import { Settings } from "../model/settings.model.js"; // Import Settings
 import { uploadOnCloudinary } from "../utils/commonMethod.js";
 import { createToken, verifyToken } from "../utils/authToken.js";
 import {
@@ -36,7 +37,6 @@ const _captureSessionPayment = async (session) => {
     // 1. Capture the payment via Stripe
     await capturePaymentIntent(session.paymentIntentId);
 
-    // Use the length of enrolledStudents for the amount calculation
     const numberOfAttendees = session.enrolledStudents.length || 1;
 
     // 2. Create a transaction record for auditing
@@ -79,6 +79,32 @@ const _captureSessionPayment = async (session) => {
   }
 };
 
+// --- THIS IS THE NEW PROFIT CALCULATION LOGIC ---
+const _calculateAndAssignProfits = async (session) => {
+  if (session.price > 0) {
+    try {
+      const settings = await Settings.getSettings();
+      const totalAmount =
+        session.price * (session.enrolledStudents.length || 1);
+
+      const platformRate = settings.profitDistribution.platform / 100;
+      const tutorRate = settings.profitDistribution.tutor / 100;
+      const locationOwnerRate = settings.profitDistribution.locationOwner / 100;
+
+      session.adminCommission = parseFloat(
+        (totalAmount * platformRate).toFixed(2)
+      );
+      session.tutorEarnings = parseFloat((totalAmount * tutorRate).toFixed(2));
+      session.locationOwnerEarnings = parseFloat(
+        (totalAmount * locationOwnerRate).toFixed(2)
+      );
+    } catch (error) {
+      console.error("Error calculating profit distribution:", error);
+    }
+  }
+};
+
+// ... (createSessionRequest, acceptTutorOffer, createSessionOffer, bookSessionOffer, etc. remain the same) ...
 // ====================================================================
 // --- STUDENT: SESSION REQUEST WORKFLOW ---
 // ====================================================================
@@ -160,7 +186,6 @@ export const acceptTutorOffer = catchAsync(async (req, res) => {
     );
   }
 
-  // Use findByIdAndUpdate for a more reliable save
   const updatedSession = await Session.findByIdAndUpdate(
     sessionId,
     {
@@ -306,8 +331,6 @@ export const bookSessionOffer = catchAsync(async (req, res) => {
     );
   }
 
-  // --- THIS IS THE FIX ---
-  // Use findByIdAndUpdate with $push for a guaranteed atomic update.
   const updatedSession = await Session.findByIdAndUpdate(
     sessionId,
     {
@@ -316,7 +339,7 @@ export const bookSessionOffer = catchAsync(async (req, res) => {
       $push: { enrolledStudents: studentId },
     },
     { new: true }
-  ); // {new: true} returns the updated document
+  );
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
@@ -717,6 +740,8 @@ export const studentScanCheckOutQR = catchAsync(async (req, res) => {
 
   if (allCheckedOut) {
     if (session.price > 0) {
+      // Manually calculate profits before capturing payment
+      await _calculateAndAssignProfits(session);
       await _captureSessionPayment(session);
     }
     session.status = "Completed";
@@ -742,7 +767,7 @@ export const studentScanCheckOutQR = catchAsync(async (req, res) => {
 // ====================================================================
 
 export const getAllSessions = catchAsync(async (req, res) => {
-  const { type, searchTerm, category } = req.query;
+  const { type, searchTerm, category } = req.body;
   const query = {};
   if (type) {
     query.type = type;
@@ -846,6 +871,9 @@ export const adminManualCapture = catchAsync(async (req, res) => {
       });
     });
   }
+
+  // Manually calculate profits BEFORE capturing payment
+  await _calculateAndAssignProfits(session);
 
   // Trigger the payment capture and wallet update
   if (session.price > 0) {

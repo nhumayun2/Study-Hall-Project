@@ -88,7 +88,7 @@ const sessionSchema = new mongoose.Schema(
         },
       },
     ],
-    
+
     attendance: [attendanceSchema],
 
     // Policies and Notes
