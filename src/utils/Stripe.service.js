@@ -14,20 +14,17 @@ export const createPaymentIntent = async (
   destinationStripeAccountId
 ) => {
   const amountInCents = Math.round(amount * 100);
-  // This fee can be fetched from a settings model in a real app
   const applicationFeeAmount = Math.round(amountInCents * 0.2); // Assuming 20% platform fee
 
   try {
     const paymentIntent = await stripe.paymentIntents.create({
       amount: amountInCents,
       currency: "usd",
-      capture_method: "manual", // Authorize now, capture later
+      capture_method: "manual",
       application_fee_amount: applicationFeeAmount,
       transfer_data: {
         destination: destinationStripeAccountId,
       },
-      // --- FIX --- Add automatic payment methods to avoid the return_url issue on creation
-      automatic_payment_methods: { enabled: true },
     });
     return {
       clientSecret: paymentIntent.client_secret,
@@ -40,17 +37,13 @@ export const createPaymentIntent = async (
 };
 
 /**
- * @description (NEW) Confirms a Payment Intent with a test payment method.
- * This moves the status from 'requires_payment_method' to 'requires_capture'.
+ * @description Confirms a Payment Intent with a test payment method.
  */
 export const confirmPaymentIntent = async (paymentIntentId) => {
   try {
     const paymentIntent = await stripe.paymentIntents.confirm(paymentIntentId, {
-      payment_method: "pm_card_visa", // 'pm_card_visa' is a universal Stripe test card
-      // --- THIS IS THE FIX ---
-      // Provide a return_url, which is required by newer Stripe API versions
-      // for payment methods that could involve redirects.
-      return_url: `${process.env.FRONTEND_URL}/payment-success`,
+      payment_method: "pm_card_visa",
+      return_url: "http://localhost:3000/success", // Added a dummy return_url
     });
     return paymentIntent;
   } catch (error) {
@@ -89,28 +82,45 @@ export const releasePaymentIntent = async (paymentIntentId) => {
 };
 
 /**
- * @description Creates a Payout to a connected account.
+ * @description (DEPRECATED FOR THIS FLOW) Creates a Payout from the Platform's balance.
  */
 export const createPayout = async (
   amount,
   currency = "usd",
-  destinationAccountId
+  destinationAccountId // This is actually a bank account ID for payouts
 ) => {
+  // This function is incorrect for our Connect workflow.
+  // It's left here to show the difference.
   try {
-    const payout = await stripe.payouts.create(
-      {
-        amount: Math.round(amount * 100),
-        currency,
-        // Payouts don't use destination, they are direct transfers TO the account
-        // The destination parameter is for the 'destination' charge type which is different
-      },
-      {
-        stripeAccount: destinationAccountId, // Payouts must specify the connected account ID in the options
-      }
-    );
+    const payout = await stripe.payouts.create({
+      amount: Math.round(amount * 100),
+      currency,
+      destination: destinationAccountId,
+    });
     return payout;
   } catch (error) {
     console.error("Error creating payout:", error);
+    throw error;
+  }
+};
+
+/**
+ * @description (NEW & CORRECT) Creates a Transfer from a Connected Account's balance to their bank.
+ */
+export const createTransfer = async (
+  amount,
+  currency = "usd",
+  destinationStripeAccountId
+) => {
+  try {
+    const transfer = await stripe.transfers.create({
+      amount: Math.round(amount * 100),
+      currency,
+      destination: destinationStripeAccountId,
+    });
+    return transfer;
+  } catch (error) {
+    console.error("Error creating transfer:", error);
     throw error;
   }
 };

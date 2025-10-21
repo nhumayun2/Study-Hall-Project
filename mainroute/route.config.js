@@ -15,6 +15,7 @@ import reportRoutes from "../src/route/report.route.js";
 import notificationRoutes from "../src/route/notification.route.js";
 import adminRoutes from "../src/route/admin.route.js";
 import onboardingRoutes from "../src/route/onboarding.route.js";
+import homepageRoutes from "../src/route/home.route.js"
 
 const router = express.Router();
 
@@ -24,6 +25,7 @@ const router = express.Router();
 
 // Core User & Auth
 router.use("/auth", authRoutes);
+router.use("/home", homepageRoutes)
 router.use("/users", userRoutes); // Manages user profiles and minors
 
 // Core Business Logic

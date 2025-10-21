@@ -5,7 +5,9 @@ import catchAsync from "../utils/catchAsync.js";
 import { Withdrawal } from "../model/withdrawal.model.js";
 import { User } from "../model/user.model.js";
 import { Settings } from "../model/settings.model.js";
-import { createPayout } from "../utils/Stripe.service.js";
+// --- THIS IS THE FIX ---
+// We import createTransfer instead of createPayout
+import { createTransfer } from "../utils/Stripe.service.js";
 
 // ====================================================================
 // --- USER-FACING CONTROLLERS (Tutor/LocationOwner) ---
@@ -28,7 +30,6 @@ export const requestWithdrawal = catchAsync(async (req, res) => {
   }
 
   const settings = await Settings.getSettings();
-  // FIX: Path was incorrect, should be nested under withdrawalLimits
   if (amount < settings.withdrawalLimits.min) {
     throw new AppError(
       httpStatus.BAD_REQUEST,
@@ -37,15 +38,6 @@ export const requestWithdrawal = catchAsync(async (req, res) => {
   }
 
   const user = await User.findById(userId);
-
-  // --- DEBUGGING STEP ---
-  console.log("--- DEBUG: Checking wallet balance for withdrawal ---");
-  console.log(`User: ${user.name} (${user._id})`);
-  console.log("Wallet details:", user.wallet);
-  console.log(`Requested Amount: ${amount}`);
-  console.log("----------------------------------------------------");
-  // --- END DEBUGGING STEP ---
-
   if (user.wallet.balance < amount) {
     throw new AppError(
       httpStatus.BAD_REQUEST,
@@ -189,9 +181,11 @@ export const approveWithdrawalAdmin = catchAsync(async (req, res) => {
   const { withdrawalId } = req.params;
   const adminId = req.user._id;
 
+  // --- THIS IS THE FIX ---
+  // We now populate the stripeAccountId from the user, which is `select: false` in the model
   const withdrawal = await Withdrawal.findById(withdrawalId).populate(
     "user",
-    "stripeAccountId"
+    "+stripeAccountId"
   );
   if (!withdrawal || withdrawal.status !== "Pending") {
     throw new AppError(
@@ -211,14 +205,16 @@ export const approveWithdrawalAdmin = catchAsync(async (req, res) => {
     withdrawal.status = "Processing";
     await withdrawal.save();
 
-    const payout = await createPayout(
+    // --- THIS IS THE FIX ---
+    // We now call createTransfer, not createPayout
+    const transfer = await createTransfer(
       withdrawal.amount,
       "usd",
       withdrawal.user.stripeAccountId
     );
 
     withdrawal.status = "Approved";
-    withdrawal.paymentGatewayPayoutId = payout.id;
+    withdrawal.paymentGatewayPayoutId = transfer.id; // It's a transfer ID now, but we can reuse the field
     withdrawal.processedAt = new Date();
     withdrawal.processedBy = adminId;
 
@@ -231,7 +227,7 @@ export const approveWithdrawalAdmin = catchAsync(async (req, res) => {
     sendResponse(res, {
       statusCode: httpStatus.OK,
       success: true,
-      message: "Withdrawal approved and payout initiated.",
+      message: "Withdrawal approved and transfer initiated.", // Message updated for clarity
       data: withdrawal,
     });
   } catch (error) {
@@ -240,14 +236,14 @@ export const approveWithdrawalAdmin = catchAsync(async (req, res) => {
     user.wallet.pendingBalance -= withdrawal.amount;
 
     withdrawal.status = "Failed";
-    withdrawal.rejectionReason = `Stripe Payout failed: ${error.message}`;
+    withdrawal.rejectionReason = `Stripe Transfer failed: ${error.message}`;
 
     await user.save({ validateBeforeSave: false });
     await withdrawal.save();
 
     throw new AppError(
       httpStatus.INTERNAL_SERVER_ERROR,
-      `Payout failed. Funds returned to user's wallet. Error: ${error.message}`
+      `Transfer failed. Funds returned to user's wallet. Error: ${error.message}`
     );
   }
 });
