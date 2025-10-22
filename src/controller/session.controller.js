@@ -7,7 +7,7 @@ import { Session } from "../model/session.model.js";
 import { User } from "../model/user.model.js";
 import { Location } from "../model/location.model.js";
 import { Transaction } from "../model/transaction.model.js";
-import { Settings } from "../model/settings.model.js"; // Import Settings
+import { Settings } from "../model/settings.model.js";
 import { uploadOnCloudinary } from "../utils/commonMethod.js";
 import { createToken, verifyToken } from "../utils/authToken.js";
 import {
@@ -79,13 +79,16 @@ const _captureSessionPayment = async (session) => {
   }
 };
 
-// --- THIS IS THE NEW PROFIT CALCULATION LOGIC ---
+// --- PROFIT CALCULATION LOGIC ---
 const _calculateAndAssignProfits = async (session) => {
   if (session.price > 0) {
     try {
       const settings = await Settings.getSettings();
-      const totalAmount =
-        session.price * (session.enrolledStudents.length || 1);
+      const numberOfAttendees = Math.max(
+        session.enrolledStudents?.length || 0,
+        1
+      );
+      const totalAmount = session.price * numberOfAttendees;
 
       const platformRate = settings.profitDistribution.platform / 100;
       const tutorRate = settings.profitDistribution.tutor / 100;
@@ -100,11 +103,17 @@ const _calculateAndAssignProfits = async (session) => {
       );
     } catch (error) {
       console.error("Error calculating profit distribution:", error);
+      session.adminCommission = 0;
+      session.tutorEarnings = 0;
+      session.locationOwnerEarnings = 0;
     }
+  } else {
+    session.adminCommission = 0;
+    session.tutorEarnings = 0;
+    session.locationOwnerEarnings = 0;
   }
 };
 
-// ... (createSessionRequest, acceptTutorOffer, createSessionOffer, bookSessionOffer, etc. remain the same) ...
 // ====================================================================
 // --- STUDENT: SESSION REQUEST WORKFLOW ---
 // ====================================================================
@@ -392,6 +401,58 @@ export const applyToSessionRequest = catchAsync(async (req, res) => {
     statusCode: httpStatus.OK,
     success: true,
     message: "Your application has been submitted to the student.",
+    data: session,
+  });
+});
+
+/**
+ * @description TUTOR withdraws their offer/application from a student's session request.
+ * @route PATCH /api/v1/sessions/request/:sessionId/withdraw
+ * @access Tutor
+ */
+export const withdrawOffer = catchAsync(async (req, res) => {
+  const tutorId = req.user._id;
+  const { sessionId } = req.params;
+
+  const session = await Session.findById(sessionId);
+
+  if (
+    !session ||
+    session.type !== "Request" ||
+    !["Pending", "AwaitingTutorSelection"].includes(session.status)
+  ) {
+    throw new AppError(
+      httpStatus.NOT_FOUND,
+      "Active session request not found or cannot be withdrawn from."
+    );
+  }
+
+  const applicantIndex = session.tutorApplicants.findIndex(
+    (app) => app.tutorId.toString() === tutorId.toString()
+  );
+
+  if (applicantIndex === -1) {
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      "You have not applied to this session request."
+    );
+  }
+
+  session.tutorApplicants.splice(applicantIndex, 1);
+
+  if (
+    session.tutorApplicants.length === 0 &&
+    session.status === "AwaitingTutorSelection"
+  ) {
+    session.status = "Pending";
+  }
+
+  await session.save();
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Your offer has been successfully withdrawn.",
     data: session,
   });
 });
@@ -740,7 +801,6 @@ export const studentScanCheckOutQR = catchAsync(async (req, res) => {
 
   if (allCheckedOut) {
     if (session.price > 0) {
-      // Manually calculate profits before capturing payment
       await _calculateAndAssignProfits(session);
       await _captureSessionPayment(session);
     }
@@ -759,6 +819,183 @@ export const studentScanCheckOutQR = catchAsync(async (req, res) => {
     success: true,
     message,
     data: session,
+  });
+});
+
+// ====================================================================
+// --- NEW: EDIT, DELETE, DUPLICATE SESSIONS ---
+// ====================================================================
+
+/**
+ * @description (NEW) Edit a session. (Student or Tutor)
+ * @route PATCH /api/v1/sessions/:sessionId/edit
+ * @access Authenticated (Creator of the session)
+ */
+export const updateSession = catchAsync(async (req, res) => {
+  const { sessionId } = req.params;
+  const userId = req.user._id;
+  let updates = req.body;
+
+  const session = await Session.findById(sessionId);
+
+  if (!session) {
+    throw new AppError(httpStatus.NOT_FOUND, "Session not found.");
+  }
+
+  // 1. Authorization Check: Must be the creator
+  if (session.creator.toString() !== userId.toString()) {
+    throw new AppError(
+      httpStatus.FORBIDDEN,
+      "You are not authorized to edit this session."
+    );
+  }
+
+  // 2. Business Logic Check: Cannot edit if it's booked or completed
+  if (
+    ["Booked", "Ongoing", "Completed", "Cancelled"].includes(session.status) &&
+    session.enrolledStudents.length > 0
+  ) {
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      "Cannot edit a session that has been booked or completed."
+    );
+  }
+
+  // 3. Handle multipart/form-data for schedule (if sent as string)
+  try {
+    if (updates.schedule && typeof updates.schedule === "string") {
+      updates.schedule = JSON.parse(updates.schedule);
+    }
+  } catch (e) {
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      "Invalid JSON format for schedule data."
+    );
+  }
+
+  // 4. Handle optional file upload for cover photo
+  if (req.file) {
+    const coverPhotoResult = await uploadOnCloudinary(req.file.buffer);
+    updates.coverPhoto = {
+      public_id: coverPhotoResult.public_id,
+      url: coverPhotoResult.secure_url,
+    };
+  }
+
+  // 5. Apply updates and save
+  Object.assign(session, updates);
+  await session.save();
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Session updated successfully.",
+    data: session,
+  });
+});
+
+/**
+ * @description (NEW) Delete a session. (Student or Tutor)
+ * @route DELETE /api/v1/sessions/:sessionId
+ * @access Authenticated (Creator of the session)
+ */
+export const deleteSession = catchAsync(async (req, res) => {
+  const { sessionId } = req.params;
+  const userId = req.user._id;
+
+  const session = await Session.findById(sessionId);
+
+  if (!session) {
+    throw new AppError(httpStatus.NOT_FOUND, "Session not found.");
+  }
+
+  // 1. Authorization Check: Must be the creator
+  if (session.creator.toString() !== userId.toString()) {
+    throw new AppError(
+      httpStatus.FORBIDDEN,
+      "You are not authorized to delete this session."
+    );
+  }
+
+  // 2. Business Logic Check: Cannot delete if it has participants or is completed
+  if (
+    session.enrolledStudents.length > 0 ||
+    ["Booked", "Ongoing", "Completed"].includes(session.status)
+  ) {
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      "Cannot delete a session that has or had participants. Please cancel it instead."
+    );
+  }
+
+  // 3. Perform delete
+  await Session.findByIdAndDelete(sessionId);
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Session deleted successfully.",
+    data: null,
+  });
+});
+
+/**
+ * @description (NEW) Duplicate a session. (Tutor only)
+ * @route POST /api/v1/sessions/:sessionId/duplicate
+ * @access Tutor
+ */
+export const duplicateSession = catchAsync(async (req, res) => {
+  const { sessionId } = req.params;
+  const tutorId = req.user._id;
+
+  const originalSession = await Session.findById(sessionId).lean(); // .lean() for a plain JS object
+
+  if (!originalSession) {
+    throw new AppError(httpStatus.NOT_FOUND, "Original session not found.");
+  }
+
+  // 1. Authorization Check: Must be the creator and it must be an "Offer"
+  if (
+    originalSession.creator.toString() !== tutorId.toString() ||
+    originalSession.type !== "Offer"
+  ) {
+    throw new AppError(
+      httpStatus.FORBIDDEN,
+      "You can only duplicate your own session offers."
+    );
+  }
+
+  // 2. Prepare new session data
+  // Destructure to remove fields that should not be copied
+  const {
+    _id,
+    createdAt,
+    updatedAt,
+    status,
+    enrolledStudents,
+    attendance,
+    tutorApplicants,
+    paymentIntentId,
+    checkOutToken,
+    cancellationDetails,
+    ...newSessionData
+  } = originalSession;
+
+  // 3. Set new properties for the duplicated session
+  newSessionData.title = `${originalSession.title} (Copy)`;
+  newSessionData.status = "Active"; // New sessions are active by default
+
+  // Ensure schedule is not in the past (optional, but good practice)
+  // For simplicity, we'll just copy it. The tutor can edit it.
+  // newSessionData.schedule = ... // TBD if schedule needs modification
+
+  const duplicatedSession = await Session.create(newSessionData);
+
+  sendResponse(res, {
+    statusCode: httpStatus.CREATED,
+    success: true,
+    message: "Session duplicated successfully.",
+    data: duplicatedSession,
   });
 });
 
@@ -824,28 +1061,226 @@ export const getSessionDetails = catchAsync(async (req, res) => {
   });
 });
 
+// --- UPDATED getMySessions with Tutor Logic & Refined Offers ---
+/**
+ * @description Get sessions associated with the logged-in user (Student OR Tutor), with filtering.
+ * @route GET /api/v1/sessions/my-sessions
+ * @access Authenticated
+ */
 export const getMySessions = catchAsync(async (req, res) => {
   const userId = req.user._id;
-  const sessions = await Session.find({
-    $or: [
+  const userRole = req.user.role;
+  const {
+    tab,
+    status: statusFilter,
+    dateFrom,
+    dateTo,
+    page = 1,
+    limit = 10,
+  } = req.query;
+  const skip = (parseInt(page) - 1) * parseInt(limit);
+
+  let query = {};
+  let sortOptions = { "schedule.date": -1 };
+  let populateOptions = [
+    { path: "creator", select: "name" },
+    { path: "acceptedTutor", select: "name" },
+    { path: "location", select: "name" },
+  ];
+
+  if (userRole === "Student") {
+    if (tab === "Upcoming") {
+      query.enrolledStudents = userId;
+      query.status = { $in: ["Booked", "Ongoing"] };
+      query["schedule.date"] = { $gte: new Date().setHours(0, 0, 0, 0) };
+      sortOptions = { "schedule.date": 1 };
+    } else if (tab === "Request") {
+      query.creator = userId;
+      query.type = "Request";
+      query.status = { $in: ["Pending", "AwaitingTutorSelection"] };
+      sortOptions = { createdAt: -1 };
+      populateOptions.push({
+        path: "tutorApplicants.tutorId",
+        select: "name avatar tutorProfile",
+      });
+    } else if (tab === "History") {
+      query.$or = [{ enrolledStudents: userId }, { creator: userId }];
+      query.status = { $in: ["Completed", "Cancelled"] };
+      sortOptions = { updatedAt: -1 };
+
+      if (statusFilter) {
+        const validHistoryStatus = ["Completed", "Cancelled"];
+        if (validHistoryStatus.includes(statusFilter)) {
+          query.status = statusFilter;
+        } else {
+          console.warn(
+            `Invalid status filter "${statusFilter}" for History tab ignored.`
+          );
+        }
+      }
+      if (dateFrom || dateTo) {
+        query["schedule.date"] = query["schedule.date"] || {};
+        if (dateFrom) {
+          const startDate = new Date(dateFrom);
+          startDate.setHours(0, 0, 0, 0);
+          query["schedule.date"].$gte = startDate;
+        }
+        if (dateTo) {
+          const endDate = new Date(dateTo);
+          endDate.setHours(23, 59, 59, 999);
+          query["schedule.date"].$lte = endDate;
+        }
+      }
+    } else {
+      query.$or = [{ creator: userId }, { enrolledStudents: userId }];
+    }
+  } else if (userRole === "Tutor") {
+    if (tab === "Upcoming") {
+      query.acceptedTutor = userId;
+      query.status = { $in: ["Booked", "Ongoing"] };
+      query["schedule.date"] = { $gte: new Date().setHours(0, 0, 0, 0) };
+      sortOptions = { "schedule.date": 1 };
+    } else if (tab === "Offers") {
+      query.type = "Request";
+      query.status = { $in: ["Pending", "AwaitingTutorSelection"] };
+      query["tutorApplicants.tutorId"] = userId;
+      sortOptions = { createdAt: -1 };
+      populateOptions = [
+        { path: "creator", select: "name avatar" },
+        { path: "location", select: "name" },
+      ];
+    } else if (tab === "History") {
+      query.acceptedTutor = userId;
+      query.status = { $in: ["Completed", "Cancelled"] };
+      sortOptions = { updatedAt: -1 };
+
+      if (statusFilter) {
+        const validHistoryStatus = ["Completed", "Cancelled"];
+        if (validHistoryStatus.includes(statusFilter)) {
+          query.status = statusFilter;
+        } else {
+          console.warn(
+            `Invalid status filter "${statusFilter}" for History tab ignored.`
+          );
+        }
+      }
+      if (dateFrom || dateTo) {
+        query["schedule.date"] = query["schedule.date"] || {};
+        if (dateFrom) {
+          const startDate = new Date(dateFrom);
+          startDate.setHours(0, 0, 0, 0);
+          query["schedule.date"].$gte = startDate;
+        }
+        if (dateTo) {
+          const endDate = new Date(dateTo);
+          endDate.setHours(23, 59, 59, 999);
+          query["schedule.date"].$lte = endDate;
+        }
+      }
+    } else {
+      query.$or = [
+        { acceptedTutor: userId },
+        { creator: userId, type: "Offer" },
+      ];
+    }
+  } else {
+    query.$or = [
       { creator: userId },
       { acceptedTutor: userId },
       { enrolledStudents: userId },
-    ],
-  })
-    .populate("creator", "name")
-    .populate("acceptedTutor", "name")
-    .sort({ "schedule.date": -1 });
+    ];
+  }
+
+  const totalSessions = await Session.countDocuments(query);
+
+  const sessions = await Session.find(query)
+    .populate(populateOptions)
+    .sort(sortOptions)
+    .skip(skip)
+    .limit(parseInt(limit))
+    .lean();
+
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
     message: "Your sessions have been fetched successfully.",
-    data: sessions,
+    data: {
+      sessions,
+      total: totalSessions,
+      page: parseInt(page),
+      totalPages: Math.ceil(totalSessions / limit),
+    },
+  });
+});
+// --- END UPDATED getMySessions ---
+
+// ====================================================================
+// --- CALENDAR VIEW CONTROLLER ---
+// ====================================================================
+/**
+ * @description Get sessions for the logged-in user within a specific date range for calendar views.
+ * @route GET /api/v1/sessions/my-calendar
+ * @access Authenticated (Student, Tutor)
+ */
+export const getMyCalendarSessions = catchAsync(async (req, res) => {
+  const userId = req.user._id;
+  const { view, targetDate } = req.query;
+
+  let startDate, endDate;
+  const date = targetDate ? new Date(targetDate) : new Date();
+
+  if (view === "day") {
+    startDate = new Date(date);
+    startDate.setHours(0, 0, 0, 0);
+    endDate = new Date(date);
+    endDate.setHours(23, 59, 59, 999);
+  } else if (view === "week") {
+    const dayOfWeek = date.getDay();
+    startDate = new Date(date);
+    startDate.setDate(date.getDate() - dayOfWeek);
+    startDate.setHours(0, 0, 0, 0);
+    endDate = new Date(startDate);
+    endDate.setDate(startDate.getDate() + 6);
+    endDate.setHours(23, 59, 59, 999);
+  } else if (view === "month") {
+    startDate = new Date(date.getFullYear(), date.getMonth(), 1);
+    startDate.setHours(0, 0, 0, 0);
+    endDate = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+    endDate.setHours(23, 59, 59, 999);
+  } else {
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      "Invalid view parameter. Must be 'day', 'week', or 'month'."
+    );
+  }
+
+  const query = {
+    $or: [
+      { enrolledStudents: userId },
+      { creator: userId },
+      { acceptedTutor: userId },
+    ],
+    status: { $nin: ["Cancelled"] },
+    "schedule.date": { $gte: startDate, $lte: endDate },
+  };
+
+  const sessions = await Session.find(query)
+    .select(
+      "title schedule.date schedule.startTime schedule.duration status type"
+    )
+    .sort({ "schedule.date": 1, "schedule.startTime": 1 })
+    .lean();
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: `Calendar sessions fetched successfully for ${view} view.`,
+    data: { sessions, startDate, endDate },
   });
 });
 
 // ====================================================================
-// --- NEW: ADMIN DEBUGGING CONTROLLER ---
+// --- ADMIN DEBUGGING CONTROLLER ---
 // ====================================================================
 export const adminManualCapture = catchAsync(async (req, res) => {
   const { sessionId } = req.params;
@@ -861,7 +1296,6 @@ export const adminManualCapture = catchAsync(async (req, res) => {
     );
   }
 
-  // Manually add the student to attendance for calculation purposes
   if (session.enrolledStudents.length > 0 && session.attendance.length === 0) {
     session.enrolledStudents.forEach((studentId) => {
       session.attendance.push({
@@ -872,15 +1306,12 @@ export const adminManualCapture = catchAsync(async (req, res) => {
     });
   }
 
-  // Manually calculate profits BEFORE capturing payment
   await _calculateAndAssignProfits(session);
 
-  // Trigger the payment capture and wallet update
   if (session.price > 0) {
     await _captureSessionPayment(session);
   }
 
-  // Complete the session
   session.status = "Completed";
   await session.save();
 

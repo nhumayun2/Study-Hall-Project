@@ -4,6 +4,7 @@ import {
   getAllSessions,
   getSessionDetails,
   getMySessions,
+  getMyCalendarSessions,
   // Student Request Workflow
   createSessionRequest,
   acceptTutorOffer,
@@ -12,6 +13,7 @@ import {
   bookSessionOffer,
   // Tutor Application Workflow
   applyToSessionRequest,
+  withdrawOffer,
   // Payment Flow
   preauthorizeSessionPayment,
   // In-Session Actions
@@ -20,14 +22,18 @@ import {
   tutorScanCheckInQR,
   tutorGenerateCheckOutQR,
   studentScanCheckOutQR,
-  // --- NEW DEBUGGING ROUTE ---
+  // Admin Debugging Route
   adminManualCapture,
+  // --- NEW ACTIONS ---
+  updateSession,
+  deleteSession,
+  duplicateSession,
 } from "../controller/session.controller.js";
 import {
   protect,
   isStudent,
   isTutor,
-  isAdmin, // Import isAdmin
+  isAdmin,
 } from "../middleware/auth.middleware.js";
 import upload from "../middleware/multer.middleware.js";
 
@@ -37,13 +43,25 @@ const router = express.Router();
 // --- PUBLIC ROUTES (for browsing sessions) ---
 // ====================================================================
 router.get("/", getAllSessions);
-router.get("/:sessionId", getSessionDetails);
 
 // ====================================================================
 // --- AUTHENTICATED USER ROUTES ---
 // ====================================================================
+
 router.get("/my-sessions", protect, getMySessions);
-router.patch("/:sessionId/cancel", protect, cancelSession);
+router.get("/my-calendar", protect, getMyCalendarSessions); // Accessible to all logged-in users
+
+router.patch("/:sessionId/cancel", protect, cancelSession); // General cancel for booked sessions
+
+// --- NEW: EDIT AND DELETE (for session creators) ---
+// These routes are protected and check for creator ownership in the controller
+router.patch(
+  "/:sessionId/edit",
+  protect,
+  upload.single("coverPhoto"), // Allow photo upload during edit
+  updateSession
+);
+router.delete("/:sessionId", protect, deleteSession); // General delete for unbooked sessions
 
 // ====================================================================
 // --- STUDENT-SPECIFIC ROUTES ---
@@ -73,6 +91,11 @@ router.post(
   isTutor,
   applyToSessionRequest
 );
+
+router.patch("/request/:sessionId/withdraw", protect, isTutor, withdrawOffer);
+
+// --- NEW: DUPLICATE (Tutor only) ---
+router.post("/:sessionId/duplicate", protect, isTutor, duplicateSession);
 
 // ====================================================================
 // --- PAYMENT & QR CODE FLOW ---
@@ -105,13 +128,13 @@ router.get(
 router.post("/check-out/scan", protect, isStudent, studentScanCheckOutQR);
 
 // ====================================================================
-// --- NEW: ADMIN DEBUGGING ROUTE ---
+// --- ADMIN DEBUGGING ROUTE ---
 // ====================================================================
-/**
- * @route POST /api/v1/sessions/:sessionId/manual-capture
- * @description Manually captures payment and completes a session for debugging.
- * @access Admin
- */
 router.post("/:sessionId/manual-capture", protect, isAdmin, adminManualCapture);
+
+// ====================================================================
+// --- PARAMETERIZED ROUTE (MUST BE LAST for GET) ---
+// ====================================================================
+router.get("/:sessionId", getSessionDetails);
 
 export default router;
