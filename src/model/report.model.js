@@ -17,12 +17,12 @@ const reportSchema = new mongoose.Schema(
     // The subject of the report (what is being reported).
     reportSubjectId: {
       type: mongoose.Schema.Types.ObjectId,
-      required: true,
+      //required: true,
       refPath: "reportSubjectModel", // Mongoose will use the value of 'reportSubjectModel' to determine which model to populate from.
     },
     reportSubjectModel: {
       type: String,
-      required: true,
+      //required: true,
       enum: ["User", "Session", "Location"], // Defines the possible types of content that can be reported.
     },
 

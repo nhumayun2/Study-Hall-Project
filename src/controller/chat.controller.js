@@ -2,10 +2,11 @@ import httpStatus from "http-status";
 import catchAsync from "../utils/catchAsync.js";
 import sendResponse from "../utils/sendResponse.js";
 import { Chat } from "../model/chat.model.js";
+import { User } from "../model/user.model.js"; // Import User model for manual population
 import AppError from "../errors/AppError.js";
+import mongoose from "mongoose";
 
 export const sendMessage = catchAsync(async (req, res) => {
-  // FIX: Using 'message' field name to match the chat.model.js schema
   const { recipientId, message } = req.body;
   const senderId = req.user._id;
 
@@ -14,20 +15,19 @@ export const sendMessage = catchAsync(async (req, res) => {
       httpStatus.BAD_REQUEST,
       "Recipient ID and message content are required."
     );
-  } // Check if a conversation already exists between the two users // NOTE: Your current model schema uses 'participants' array, but controller uses 'sender'/'recipient' fields. // Assuming your Chat model will be structured to support this controller logic (sender/recipient fields).
+  }
 
-  const conversation = await Chat.findOne({
-    $or: [
-      { sender: senderId, recipient: recipientId },
-      { sender: recipientId, recipient: senderId },
-    ],
+  const senderObjectId = new mongoose.Types.ObjectId(senderId);
+  const recipientObjectId = new mongoose.Types.ObjectId(recipientId);
+
+  let conversation = await Chat.findOne({
+    participants: { $all: [senderObjectId, recipientObjectId] },
   });
 
   if (conversation) {
-    // If conversation exists, add the new message to the messages array
     conversation.messages.push({
       sender: senderId,
-      message, // FIX: Use 'message'
+      message,
       timestamp: new Date(),
     });
     await conversation.save();
@@ -39,12 +39,9 @@ export const sendMessage = catchAsync(async (req, res) => {
       data: conversation,
     });
   } else {
-    // If no conversation exists, create a new one
     const newConversation = await Chat.create({
-      // NOTE: Using sender/recipient fields based on your controller usage
-      sender: senderId,
-      recipient: recipientId,
-      messages: [{ sender: senderId, message, timestamp: new Date() }], // FIX: Use 'message'
+      participants: [senderObjectId, recipientObjectId],
+      messages: [{ sender: senderId, message, timestamp: new Date() }],
     });
 
     sendResponse(res, {
@@ -58,18 +55,42 @@ export const sendMessage = catchAsync(async (req, res) => {
 
 export const getConversationHistory = catchAsync(async (req, res) => {
   const { recipientId } = req.params;
-  const userId = req.user._id; // Populate the sender of each message
+  const userId = req.user._id;
 
+  const userObjectId = new mongoose.Types.ObjectId(userId);
+  const recipientObjectId = new mongoose.Types.ObjectId(recipientId);
+
+  // Find the conversation without populating messages initially
   const conversation = await Chat.findOne({
-    $or: [
-      { sender: userId, recipient: recipientId },
-      { sender: recipientId, recipient: userId },
-    ],
-  }).populate("messages.sender", "name avatar"); // Corrected path for population
+    participants: { $all: [userObjectId, recipientObjectId] },
+  }).lean(); // Use .lean() for potentially faster read and easier modification
 
   if (!conversation) {
-    throw new AppError(httpStatus.NOT_FOUND, "Conversation not found.");
+    return sendResponse(res, {
+      statusCode: httpStatus.OK,
+      success: true,
+      message: "Conversation history fetched successfully.",
+      data: { participants: [userId, recipientId], messages: [] },
+    });
   }
+
+  // --- THIS IS THE FIX ---
+  // Manually populate sender details for each message
+  const populatedMessages = await Promise.all(
+    conversation.messages.map(async (msg) => {
+      const senderDetails = await User.findById(msg.sender)
+        .select("name avatar")
+        .lean();
+      return {
+        ...msg, // Spread the original message properties
+        sender: senderDetails, // Replace the sender ID with the populated object
+      };
+    })
+  );
+  // --- END FIX ---
+
+  // Replace the original messages with the populated ones
+  conversation.messages = populatedMessages;
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
@@ -81,13 +102,13 @@ export const getConversationHistory = catchAsync(async (req, res) => {
 
 export const getMyConversations = catchAsync(async (req, res) => {
   const userId = req.user._id;
+  const userObjectId = new mongoose.Types.ObjectId(userId);
 
   const conversations = await Chat.find({
-    $or: [{ sender: userId }, { recipient: userId }],
+    participants: userObjectId,
   })
-    .populate("sender", "name avatar")
-    .populate("recipient", "name avatar")
-    .sort({ createdAt: -1 }); // Sort by conversation creation time (safer than deep message sort)
+    .populate("participants", "name avatar")
+    .sort({ updatedAt: -1 });
 
   sendResponse(res, {
     statusCode: httpStatus.OK,

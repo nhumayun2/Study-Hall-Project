@@ -7,7 +7,7 @@ import {
   refreshToken,
   register,
   resetPassword,
-  // The 'verifyOTPForReset' function is removed as it's no longer needed.
+  socialLogin,
   verifyEmail,
 } from "../controller/auth.controller.js";
 import { protect } from "../middleware/auth.middleware.js";
@@ -17,6 +17,7 @@ const router = express.Router();
 // --- Core Authentication Routes ---
 router.post("/register", register);
 router.post("/login", login);
+router.post("/social-login", socialLogin);
 router.post("/verify-email", verifyEmail); // Renamed for clarity from '/verify'
 
 // --- Password Management ---

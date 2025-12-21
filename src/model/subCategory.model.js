@@ -9,10 +9,11 @@ const subCategorySchema = new mongoose.Schema(
     name: {
       type: String,
       required: [true, "Sub-category name is required."],
+      unique: true,
       trim: true,
     },
     // This creates a direct link to the parent Category document.
-    category: {
+    parentCategory: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Category",
       required: true,

@@ -1,0 +1,119 @@
+*** Begin Patch
+*** Update File: docs/generate_postman_collection.js
+@@
+-const sections = [
+-];
++const sections = [
++  {
++    name: "Authentication",
++    description: "Sign up, login, social auth, and token lifecycle endpoints.",
++    requests: [
++      {
++        name: "Register User",
++        method: "POST",
++        path: "/auth/register",
++        public: true,
++        description:
++          "Create a new user (Student, Tutor, or LocationOwner). Minors can be provided during sign up.",
++        body: {
++          name: "Jane Doe",
++          username: "janedoe01",
++          email: "jane@example.com",
++          password: "Secret123!",
++          confirmPassword: "Secret123!",
++          gender: "Female",
++          dob: "2000-01-15",
++          role: "Student",
++          minors: [
++            {
++              name: "Tommy Doe",
++              gender: "Male",
++              dob: "2015-09-01",
++            },
++          ],
++        },
++      },
++      {
++        name: "Login",
++        method: "POST",
++        path: "/auth/login",
++        public: true,
++        description: "Exchange email/password for an access token and refresh token cookie.",
++        body: {
++          email: "jane@example.com",
++          password: "Secret123!",
++        },
++      },
++      {
++        name: "Social Login",
++        method: "POST",
++        path: "/auth/social-login",
++        public: true,
++        description:
++          "Send a Google or Facebook token to login or create a linked user. Provider must be 'google' or 'facebook'.",
++        body: {
++          token: "eyJhbGci...",
++          provider: "google",
++          role: "Student",
++        },
++      },
++      {
++        name: "Verify Email OTP",
++        method: "POST",
++        path: "/auth/verify-email",
++        public: true,
++        description: "Confirm the OTP delivered by email after registration or login retry.",
++        body: {
++          email: "jane@example.com",
++          otp: "123456",
++        },
++      },
++      {
++        name: "Forgot Password",
++        method: "POST",
++        path: "/auth/forget-password",
++        public: true,
++        description: "Trigger a password reset email containing a one-time OTP.",
++        body: {
++          email: "jane@example.com",
++        },
++      },
++      {
++        name: "Reset Password",
++        method: "POST",
++        path: "/auth/reset-password",
++        public: true,
++        description: "Update password by submitting the OTP that was emailed via the forgot password step.",
++        body: {
++          email: "jane@example.com",
++          otp: "123456",
++          newPassword: "NewSecret123!",
++        },
++      },
++      {
++        name: "Change Password",
++        method: "PATCH",
++        path: "/auth/change-password",
++        description: "Authenticated users can rotate their password by providing the current one.",
++        body: {
++          oldPassword: "Secret123!",
++          newPassword: "NewSecret123!",
++        },
++      },
++      {
++        name: "Refresh Access Token",
++        method: "POST",
++        path: "/auth/refresh-token",
++        public: true,
++        description: "Use the refreshToken cookie to mint a new short-lived access token.",
++      },
++      {
++        name: "Logout",
++        method: "POST",
++        path: "/auth/logout",
++        description: "Clears the refresh token cookie and invalidates it server side.",
++      },
++    ],
++  },
++];
+*** End Patch

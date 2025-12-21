@@ -6,6 +6,7 @@ import {
   getAllLocations,
   getLocationDetails,
 } from "../controller/location.controller.js";
+import { getLocationOwnerHomepage } from "../controller/home.controller.js";
 import { isLocationOwner, protect } from "../middleware/auth.middleware.js";
 import upload from "../middleware/multer.middleware.js";
 
@@ -27,6 +28,8 @@ router.get("/:locationId", getLocationDetails);
 
 // All routes below this point require the user to be authenticated.
 router.use(protect);
+
+router.get("/my-homepage", isLocationOwner, getLocationOwnerHomepage);
 
 // GET /api/v1/locations/my-locations - Get all locations owned by the current user
 router.get("/my-locations", isLocationOwner, getMyLocations);

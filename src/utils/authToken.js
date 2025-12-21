@@ -21,3 +21,4 @@ export const createToken = (jwtPayload, secret, expiresIn) => {
 export const verifyToken = (token, secret) => {
   return jwt.verify(token, secret);
 };
+ 

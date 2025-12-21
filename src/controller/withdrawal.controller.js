@@ -1,100 +1,100 @@
 import httpStatus from "http-status";
-import catchAsync from "../utils/catchAsync.js";
-import sendResponse from "../utils/sendResponse.js";
 import AppError from "../errors/AppError.js";
+import sendResponse from "../utils/sendResponse.js";
+import catchAsync from "../utils/catchAsync.js";
 import { Withdrawal } from "../model/withdrawal.model.js";
 import { User } from "../model/user.model.js";
-import { stripe, createPayout } from "../utils/Stripe.service.js";
-import { uniqueTransactionId } from "../utils/commonMethod.js";
+import { Settings } from "../model/settings.model.js";
+// --- THIS IS THE FIX ---
+// We import createTransfer instead of createPayout
+import { createTransfer } from "../utils/Stripe.service.js";
 
-// Configuration for minimum withdrawal
-const MIN_WITHDRAWAL_AMOUNT = 20;
-
-// =============================================================
-// --- USER-FACING WITHDRAWAL CONTROLLERS (Tutor/LocationOwner) ---
-// =============================================================
+// ====================================================================
+// --- USER-FACING CONTROLLERS (Tutor/LocationOwner) ---
+// ====================================================================
 
 /**
- * @desc User: Request a new withdrawal (Tutor/LocationOwner)
+ * @description USER (Tutor/LocationOwner) requests a withdrawal from their wallet.
  * @route POST /api/v1/withdrawals/request
  * @access Tutor, LocationOwner
  */
-export const requestWithdrawalUser = catchAsync(async (req, res) => {
+export const requestWithdrawal = catchAsync(async (req, res) => {
   const userId = req.user._id;
-  const userRole = req.user.role;
-  const { amount, payoutMethod = "Stripe" } = req.body; // 1. Basic validation
+  const { amount } = req.body;
 
   if (!amount || typeof amount !== "number" || amount <= 0) {
-    throw new AppError(httpStatus.BAD_REQUEST, "Invalid withdrawal amount.");
-  }
-
-  if (amount < MIN_WITHDRAWAL_AMOUNT) {
     throw new AppError(
       httpStatus.BAD_REQUEST,
-      `Minimum withdrawal amount is $${MIN_WITHDRAWAL_AMOUNT}.`
+      "A valid withdrawal amount is required."
     );
-  } // 2. Check user's current available balance
-  const user = await User.findById(userId).select(
-    "availableBalance stripeAccountId"
-  );
-  if (!user) {
-    throw new AppError(httpStatus.NOT_FOUND, "User not found.");
   }
 
-  if (user.availableBalance < amount) {
+  const settings = await Settings.getSettings();
+  if (amount < settings.withdrawalLimits.min) {
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      `Minimum withdrawal amount is $${settings.withdrawalLimits.min}.`
+    );
+  }
+
+  const user = await User.findById(userId);
+  if (user.wallet.balance < amount) {
     throw new AppError(
       httpStatus.BAD_REQUEST,
       "Requested amount exceeds your available balance."
     );
-  } // 3. Check for existing pending requests
-  const existingPending = await Withdrawal.findOne({
+  }
+  if (!user.beneficiaryInfo?.bankName) {
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      "Please set up your beneficiary information in your profile before requesting a withdrawal."
+    );
+  }
+
+  const existingPendingRequest = await Withdrawal.findOne({
     user: userId,
     status: "Pending",
   });
-  if (existingPending) {
+  if (existingPendingRequest) {
     throw new AppError(
-      httpStatus.BAD_REQUEST,
+      httpStatus.CONFLICT,
       "You already have a pending withdrawal request."
     );
-  } // 4. Basic check for Stripe integration if Stripe is selected
-  if (payoutMethod.toLowerCase().includes("stripe") && !user.stripeAccountId) {
-    throw new AppError(
-      httpStatus.BAD_REQUEST,
-      "Please link your Stripe account before requesting a withdrawal via Stripe."
-    );
-  } // 5. Create the withdrawal request
-  const newRequest = await Withdrawal.create({
+  }
+
+  // Reserve the funds by moving them from available to pending
+  user.wallet.balance -= amount;
+  user.wallet.pendingBalance += amount;
+
+  const newWithdrawalRequest = await Withdrawal.create({
     user: userId,
-    userRole: userRole,
-    amount: amount,
-    payoutMethod: payoutMethod,
-    status: "Pending",
-  }); // 6. Deduct the requested amount from the user's available balance (reserved funds)
-  user.availableBalance -= amount;
+    userRole: req.user.role,
+    amount,
+    beneficiaryInfo: user.beneficiaryInfo,
+  });
+
   await user.save({ validateBeforeSave: false });
 
   sendResponse(res, {
     statusCode: httpStatus.CREATED,
     success: true,
-    message:
-      "Withdrawal request submitted successfully. It is now pending admin review.",
-    data: newRequest,
+    message: "Withdrawal request submitted successfully.",
+    data: newWithdrawalRequest,
   });
 });
 
 /**
- * @desc User: Get their withdrawal history
- * @route GET /api/v1/withdrawals/history
+ * @description USER (Tutor/LocationOwner) gets their own withdrawal history.
+ * @route GET /api/v1/withdrawals/my-history
  * @access Tutor, LocationOwner
  */
-export const getUserWithdrawalHistory = catchAsync(async (req, res) => {
+export const getMyWithdrawalHistory = catchAsync(async (req, res) => {
   const userId = req.user._id;
   const { page = 1, limit = 10 } = req.query;
   const skip = (parseInt(page) - 1) * parseInt(limit);
 
-  const query = { user: userId };
-  const total = await Withdrawal.countDocuments(query);
-  const history = await Withdrawal.find(query)
+  const total = await Withdrawal.countDocuments({ user: userId });
+  const history = await Withdrawal.find({ user: userId })
     .sort({ createdAt: -1 })
     .skip(skip)
     .limit(parseInt(limit));
@@ -102,22 +102,22 @@ export const getUserWithdrawalHistory = catchAsync(async (req, res) => {
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
-    message: "Withdrawal history retrieved successfully.",
+    message: "Your withdrawal history has been fetched successfully.",
     data: {
       history,
       total,
       page: parseInt(page),
-      limit: parseInt(limit),
+      totalPages: Math.ceil(total / limit),
     },
   });
 });
 
-// =============================================================
-// --- ADMIN-FACING WITHDRAWAL CONTROLLERS ---
-// =============================================================
+// ====================================================================
+// --- ADMIN-FACING CONTROLLERS ---
+// ====================================================================
 
 /**
- * @desc Admin: Get all withdrawal requests with filtering and pagination
+ * @description ADMIN gets a paginated and filterable list of all withdrawal requests.
  * @route GET /api/v1/admin/withdrawals
  * @access Admin
  */
@@ -131,26 +131,49 @@ export const getAllWithdrawalsAdmin = catchAsync(async (req, res) => {
 
   const totalWithdrawals = await Withdrawal.countDocuments(query);
   const withdrawals = await Withdrawal.find(query)
-    .populate("user", "name email phone role stripeAccountId") // Populate user details including Stripe ID for admin action
-    .populate("processedBy", "name email") // Admin who processed it
+    .populate("user", "name email stripeAccountId")
+    .populate("processedBy", "name")
     .sort({ createdAt: -1 })
     .skip(skip)
     .limit(parseInt(limit));
+
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
-    message: "Withdrawal requests retrieved successfully for Admin Panel",
+    message: "Withdrawal requests retrieved successfully.",
     data: {
       withdrawals,
       total: totalWithdrawals,
       page: parseInt(page),
-      limit: parseInt(limit),
+      totalPages: Math.ceil(totalWithdrawals / limit),
     },
   });
 });
 
 /**
- * @desc Admin: Approve a withdrawal request and initiate Stripe Payout
+ * @description ADMIN gets the details of a single withdrawal request.
+ * @route GET /api/v1/admin/withdrawals/:withdrawalId
+ * @access Admin
+ */
+export const getWithdrawalDetailsAdmin = catchAsync(async (req, res) => {
+  const { withdrawalId } = req.params;
+  const withdrawal = await Withdrawal.findById(withdrawalId).populate(
+    "user",
+    "name email stripeAccountId"
+  );
+  if (!withdrawal) {
+    throw new AppError(httpStatus.NOT_FOUND, "Withdrawal request not found.");
+  }
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Withdrawal details fetched.",
+    data: withdrawal,
+  });
+});
+
+/**
+ * @description ADMIN approves a withdrawal request and initiates the payout.
  * @route PATCH /api/v1/admin/withdrawals/:withdrawalId/approve
  * @access Admin
  */
@@ -158,119 +181,113 @@ export const approveWithdrawalAdmin = catchAsync(async (req, res) => {
   const { withdrawalId } = req.params;
   const adminId = req.user._id;
 
+  // --- THIS IS THE FIX ---
+  // We now populate the stripeAccountId from the user, which is `select: false` in the model
   const withdrawal = await Withdrawal.findById(withdrawalId).populate(
     "user",
-    "stripeAccountId"
+    "+stripeAccountId"
   );
-
-  if (!withdrawal) {
-    throw new AppError(httpStatus.NOT_FOUND, "Withdrawal request not found.");
+  if (!withdrawal || withdrawal.status !== "Pending") {
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      "Withdrawal request not found or is not in 'Pending' status."
+    );
   }
-  if (withdrawal.status !== "Pending") {
+
+  if (!withdrawal.user.stripeAccountId) {
     throw new AppError(
       httpStatus.BAD_REQUEST,
-      `Withdrawal is not in Pending status. Current status: ${withdrawal.status}`
+      "Cannot process payout: The user does not have a linked Stripe account."
     );
-  } // Check if Stripe is the method, and if user has a connected account
-  if (
-    withdrawal.payoutMethod.toLowerCase().includes("stripe") &&
-    !withdrawal.user.stripeAccountId
-  ) {
+  }
+
+  try {
+    withdrawal.status = "Processing";
+    await withdrawal.save();
+
+    // --- THIS IS THE FIX ---
+    // We now call createTransfer, not createPayout
+    const transfer = await createTransfer(
+      withdrawal.amount,
+      "usd",
+      withdrawal.user.stripeAccountId
+    );
+
+    withdrawal.status = "Approved";
+    withdrawal.paymentGatewayPayoutId = transfer.id; // It's a transfer ID now, but we can reuse the field
+    withdrawal.processedAt = new Date();
+    withdrawal.processedBy = adminId;
+
+    const user = await User.findById(withdrawal.user._id);
+    user.wallet.pendingBalance -= withdrawal.amount;
+
+    await withdrawal.save();
+    await user.save({ validateBeforeSave: false });
+
+    sendResponse(res, {
+      statusCode: httpStatus.OK,
+      success: true,
+      message: "Withdrawal approved and transfer initiated.", // Message updated for clarity
+      data: withdrawal,
+    });
+  } catch (error) {
+    const user = await User.findById(withdrawal.user._id);
+    user.wallet.balance += withdrawal.amount;
+    user.wallet.pendingBalance -= withdrawal.amount;
+
+    withdrawal.status = "Failed";
+    withdrawal.rejectionReason = `Stripe Transfer failed: ${error.message}`;
+
+    await user.save({ validateBeforeSave: false });
+    await withdrawal.save();
+
     throw new AppError(
-      httpStatus.BAD_REQUEST,
-      "User does not have a linked Stripe account for this payout method."
+      httpStatus.INTERNAL_SERVER_ERROR,
+      `Transfer failed. Funds returned to user's wallet. Error: ${error.message}`
     );
-  } // --- 1. Process Payout via Stripe (if using Stripe) ---
-  let payoutResult;
-  if (withdrawal.payoutMethod.toLowerCase().includes("stripe")) {
-    try {
-      // Update status to Processing right before calling external service
-      withdrawal.status = "Processing";
-      await withdrawal.save();
-      payoutResult = await createPayout(
-        withdrawal.amount,
-        "usd", // Assuming USD
-        withdrawal.user.stripeAccountId
-      );
-    } catch (stripeError) {
-      // If Stripe fails, update status to Failed and re-credit the user's balance
-      const userToUpdate = await User.findById(withdrawal.user._id);
-      if (userToUpdate) {
-        userToUpdate.availableBalance += withdrawal.amount; // Re-credit funds
-        await userToUpdate.save({ validateBeforeSave: false });
-      }
-      withdrawal.status = "Failed";
-      withdrawal.rejectionReason = `Stripe Payout failed: ${stripeError.message}`;
-      withdrawal.processedBy = adminId;
-      withdrawal.processedAt = new Date();
-      await withdrawal.save();
-
-      throw new AppError(
-        httpStatus.INTERNAL_SERVER_ERROR,
-        `Payout failed. Funds re-credited. Error: ${stripeError.message}`
-      );
-    }
-  } // --- 2. Finalize Approval ---
-  withdrawal.status = "Approved";
-  withdrawal.transactionId = payoutResult?.id || uniqueTransactionId(); // Use Stripe ID or generate fallback
-  withdrawal.processedAt = new Date();
-  withdrawal.processedBy = adminId;
-  const approvedWithdrawal = await withdrawal.save();
-
-  sendResponse(res, {
-    statusCode: httpStatus.OK,
-    success: true,
-    message: `Withdrawal of $${withdrawal.amount} approved and ${withdrawal.payoutMethod} payout initiated.`,
-    data: approvedWithdrawal,
-  });
+  }
 });
 
 /**
- * @desc Admin: Reject a withdrawal request
+ * @description ADMIN rejects a withdrawal request and returns funds to the user's wallet.
  * @route PATCH /api/v1/admin/withdrawals/:withdrawalId/reject
  * @access Admin
  */
 export const rejectWithdrawalAdmin = catchAsync(async (req, res) => {
   const { withdrawalId } = req.params;
+  const { reason } = req.body;
   const adminId = req.user._id;
-  const { rejectionReason } = req.body;
 
-  if (!rejectionReason || rejectionReason.trim().length < 10) {
+  if (!reason)
     throw new AppError(
       httpStatus.BAD_REQUEST,
-      "A detailed rejection reason (min 10 characters) is required."
+      "A reason for rejection is required."
     );
-  }
 
   const withdrawal = await Withdrawal.findById(withdrawalId);
-  if (!withdrawal) {
-    throw new AppError(httpStatus.NOT_FOUND, "Withdrawal request not found.");
-  }
-  if (withdrawal.status !== "Pending") {
+  if (!withdrawal || withdrawal.status !== "Pending") {
     throw new AppError(
       httpStatus.BAD_REQUEST,
-      "Only Pending requests can be rejected."
-    );
-  } // --- 1. Update status and save reason ---
-  withdrawal.status = "Rejected";
-  withdrawal.rejectionReason = rejectionReason;
-  withdrawal.processedAt = new Date();
-  withdrawal.processedBy = adminId; // Record the admin who rejected the request
-  const rejectedWithdrawal = await withdrawal.save(); // --- 2. Re-credit the user's available balance --- // Find user and re-add the rejected amount back to their available balance
-  const userToUpdate = await User.findById(rejectedWithdrawal.user);
-  if (userToUpdate) {
-    userToUpdate.availableBalance += rejectedWithdrawal.amount;
-    await userToUpdate.save({ validateBeforeSave: false });
-  } else {
-    console.error(
-      `CRITICAL: User ID ${rejectedWithdrawal.user} not found for withdrawal re-credit.`
+      "Withdrawal request not found or is not in 'Pending' status."
     );
   }
+
+  const user = await User.findById(withdrawal.user);
+  user.wallet.balance += withdrawal.amount;
+  user.wallet.pendingBalance -= withdrawal.amount;
+
+  withdrawal.status = "Rejected";
+  withdrawal.rejectionReason = reason;
+  withdrawal.processedAt = new Date();
+  withdrawal.processedBy = adminId;
+
+  await user.save({ validateBeforeSave: false });
+  await withdrawal.save();
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
-    message: "Withdrawal request rejected. Funds re-credited to user balance.",
-    data: rejectedWithdrawal,
+    message: "Withdrawal rejected. Funds returned to user's wallet.",
+    data: withdrawal,
   });
 });

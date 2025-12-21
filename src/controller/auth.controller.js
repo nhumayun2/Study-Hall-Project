@@ -1,6 +1,7 @@
 import httpStatus from "http-status";
+import axios from "axios"; // Used to call Facebook Graph API
+import { OAuth2Client } from "google-auth-library"; // Used to verify Google Tokens
 import AppError from "../errors/AppError.js";
-// The following line had an incorrect path. It is now corrected from 'models' to 'model'.
 import { User } from "../model/user.model.js";
 import { createToken, verifyToken } from "../utils/authToken.js";
 import catchAsync from "../utils/catchAsync.js";
@@ -8,9 +9,12 @@ import { generateOTP } from "../utils/commonMethod.js";
 import { sendEmail } from "../utils/sendEmail.js";
 import sendResponse from "../utils/sendResponse.js";
 
+// Initialize the Google OAuth Client
+// We only need the Client ID to verify that the token belongs to THIS app
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
 /**
  * @description Handles new user registration for all roles.
- * Creates a user, embeds minor information if provided, and sends a verification OTP.
  */
 export const register = catchAsync(async (req, res) => {
   const {
@@ -21,18 +25,16 @@ export const register = catchAsync(async (req, res) => {
     confirmPassword,
     gender,
     dob,
-    role, // Student, Tutor, LocationOwner
-    minors, // Array of minor objects [{ name, gender, dob }]
+    role,
+    minors,
   } = req.body;
 
-  // --- 1. VALIDATION ---
   if (!name || !email || !password || !username || !gender || !dob || !role) {
     throw new AppError(
       httpStatus.BAD_REQUEST,
-      "Please fill in all required fields: name, username, email, password, gender, dob, and role."
+      "Please fill in all required fields."
     );
   }
-
   if (password !== confirmPassword) {
     throw new AppError(httpStatus.FORBIDDEN, "Passwords do not match.");
   }
@@ -45,19 +47,6 @@ export const register = catchAsync(async (req, res) => {
     );
   }
 
-  // --- 2. PREPARE USER DATA ---
-  const userData = {
-    name,
-    username,
-    email,
-    password,
-    gender,
-    dob,
-    role,
-    minors: Array.isArray(minors) ? minors : [],
-  };
-
-  // --- 3. GENERATE OTP AND TOKEN ---
   const otp = generateOTP();
   const otpPayload = { otp, email };
   const otpToken = createToken(
@@ -66,28 +55,30 @@ export const register = catchAsync(async (req, res) => {
     process.env.OTP_EXPIRE
   );
 
-  userData.verificationInfo = { token: otpToken, verified: false };
+  const newUser = await User.create({
+    name,
+    username,
+    email,
+    password,
+    gender,
+    dob,
+    role,
+    minors: Array.isArray(minors) ? minors : [],
+    verificationInfo: { token: otpToken, verified: false },
+  });
 
-  // --- 4. CREATE USER ---
-  const newUser = await User.create(userData);
-
-  // --- 5. SEND VERIFICATION EMAIL ---
   await sendEmail(
     newUser.email,
     "Verify Your Email Address",
-    `Your 4-digit verification code is: <strong>${otp}</strong>`
+    `Your verification code is: <strong>${otp}</strong>`
   );
 
-  // --- 6. SEND RESPONSE ---
   sendResponse(res, {
     statusCode: httpStatus.CREATED,
     success: true,
     message:
       "Registration successful! A verification code has been sent to your email.",
-    data: {
-      userId: newUser._id,
-      email: newUser.email,
-    },
+    data: { userId: newUser._id, email: newUser.email },
   });
 });
 
@@ -104,12 +95,13 @@ export const login = catchAsync(async (req, res) => {
     );
   }
 
-  const user = await User.findOne({ email }).select("+password");
+  const user = await User.findOne({ email }).select(
+    "+password +verificationInfo.token +refreshToken"
+  );
 
-  if (!user || !(await user.isPasswordMatched(password, user.password))) {
+  if (!user || !(await user.isPasswordMatched(password))) {
     throw new AppError(httpStatus.UNAUTHORIZED, "Invalid email or password.");
   }
-
   if (user.status !== "Active") {
     throw new AppError(
       httpStatus.FORBIDDEN,
@@ -124,10 +116,8 @@ export const login = catchAsync(async (req, res) => {
       process.env.OTP_SECRET,
       process.env.OTP_EXPIRE
     );
-
     user.verificationInfo.token = otpToken;
     await user.save({ validateBeforeSave: false });
-
     await sendEmail(
       user.email,
       "Verify Your Email",
@@ -139,15 +129,11 @@ export const login = catchAsync(async (req, res) => {
       success: false,
       message:
         "Your account is not verified. A new verification code has been sent to your email.",
-      data: {
-        userId: user._id,
-        email: user.email,
-      },
+      data: { userId: user._id, email: user.email },
     });
   }
 
   const tokenPayload = { _id: user._id, email: user.email, role: user.role };
-
   const accessToken = createToken(
     tokenPayload,
     process.env.JWT_ACCESS_SECRET,
@@ -171,6 +157,7 @@ export const login = catchAsync(async (req, res) => {
   const userResponse = user.toObject();
   delete userResponse.password;
   delete userResponse.refreshToken;
+  delete userResponse.verificationInfo;
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
@@ -180,9 +167,196 @@ export const login = catchAsync(async (req, res) => {
   });
 });
 
+// ====================================================================
+// --- SECURE SOCIAL LOGIN HELPERS ---
+// ====================================================================
+
 /**
- * @description Verifies the OTP sent to a user's email.
+ * @description Helper: Verifies Google ID Token using google-auth-library.
+ * This ensures the token was issued by Google and is intended for our app.
  */
+const verifyGoogleToken = async (token) => {
+  try {
+    const ticket = await googleClient.verifyIdToken({
+      idToken: token,
+      audience: process.env.GOOGLE_CLIENT_ID, // Specify the CLIENT_ID of the app that accesses the backend
+    });
+    const payload = ticket.getPayload();
+    return {
+      email: payload.email,
+      name: payload.name,
+      picture: payload.picture,
+      googleId: payload.sub, // 'sub' is the unique Google user ID
+    };
+  } catch (error) {
+    console.error("Google Token Verification Error:", error.message);
+    throw new AppError(httpStatus.UNAUTHORIZED, "Invalid Google token.");
+  }
+};
+
+/**
+ * @description Helper: Verifies Facebook Access Token via Graph API.
+ * We send the token to Facebook's servers to validate it and get the user data.
+ */
+const verifyFacebookToken = async (token) => {
+  try {
+    // We request id, name, email, and picture.
+    // If the token is invalid, Facebook API will throw an error.
+    const { data } = await axios.get(
+      `https://graph.facebook.com/me?fields=id,name,email,picture&access_token=${token}`
+    );
+    return {
+      email: data.email,
+      name: data.name,
+      picture: data.picture?.data?.url,
+      facebookId: data.id,
+    };
+  } catch (error) {
+    console.error("Facebook Token Verification Error:", error.message);
+    throw new AppError(httpStatus.UNAUTHORIZED, "Invalid Facebook token.");
+  }
+};
+
+// ====================================================================
+// --- MAIN SOCIAL LOGIN CONTROLLER ---
+// ====================================================================
+
+/**
+ * @description Handles Social Login (Google & Facebook) securely.
+ * Expects { token, provider, role } in req.body
+ */
+export const socialLogin = catchAsync(async (req, res) => {
+  const { token, provider, role } = req.body;
+
+  if (!token || !provider) {
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      "Token and provider are required."
+    );
+  }
+
+  let userData;
+
+  // 1. Verify Token based on provider
+  if (provider === "google") {
+    userData = await verifyGoogleToken(token);
+  } else if (provider === "facebook") {
+    userData = await verifyFacebookToken(token);
+  } else {
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      "Invalid provider. Use 'google' or 'facebook'."
+    );
+  }
+
+  const { email, name, picture, googleId, facebookId } = userData;
+
+  if (!email) {
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      "Social login failed: Email permission is required from the provider."
+    );
+  }
+
+  // 2. Check if user exists or create new one
+  let user = await User.findOne({ email });
+
+  if (user) {
+    // --- USER EXISTS: Link accounts ---
+    let isUpdated = false;
+
+    // Link Google ID if not present
+    if (provider === "google" && !user.googleId) {
+      user.googleId = googleId;
+      isUpdated = true;
+    }
+    // Link Facebook ID if not present
+    if (provider === "facebook" && !user.facebookId) {
+      user.facebookId = facebookId;
+      isUpdated = true;
+    }
+    // Optional: Update avatar if they don't have one
+    if (picture && (!user.avatar || !user.avatar.url)) {
+      user.avatar = { url: picture, public_id: "social_login" };
+      isUpdated = true;
+    }
+
+    if (isUpdated) {
+      await user.save({ validateBeforeSave: false });
+    }
+  } else {
+    // --- USER DOES NOT EXIST: Create new account ---
+
+    // Generate unique username
+    const baseUsername = email.split("@")[0];
+    let username = baseUsername;
+    let counter = 1;
+    while (await User.findOne({ username })) {
+      username = `${baseUsername}${counter++}`;
+    }
+
+    user = await User.create({
+      name: name || "User",
+      username,
+      email,
+      googleId: googleId || undefined,
+      facebookId: facebookId || undefined,
+      role: role || "Student", // Default to Student if not provided
+      avatar: { url: picture || "", public_id: "social_login" },
+      verificationInfo: { verified: true }, // Social accounts are verified
+      status: "Active",
+    });
+  }
+
+  // Check blockage
+  if (user.status === "Blocked") {
+    throw new AppError(
+      httpStatus.FORBIDDEN,
+      "Your account has been blocked. Please contact support."
+    );
+  }
+
+  // 3. Generate Tokens
+  const tokenPayload = { _id: user._id, email: user.email, role: user.role };
+  const accessToken = createToken(
+    tokenPayload,
+    process.env.JWT_ACCESS_SECRET,
+    process.env.JWT_ACCESS_EXPIRES_IN
+  );
+  const refreshToken = createToken(
+    tokenPayload,
+    process.env.JWT_REFRESH_SECRET,
+    process.env.JWT_REFRESH_EXPIRES_IN
+  );
+
+  user.refreshToken = refreshToken;
+  await user.save({ validateBeforeSave: false });
+
+  res.cookie("refreshToken", refreshToken, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "strict",
+  });
+
+  const userResponse = user.toObject();
+  delete userResponse.password;
+  delete userResponse.refreshToken;
+  delete userResponse.verificationInfo;
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: `${
+      provider.charAt(0).toUpperCase() + provider.slice(1)
+    } login successful.`,
+    data: { user: userResponse, accessToken },
+  });
+});
+
+// ====================================================================
+// --- STANDARD AUTH CONTROLLERS ---
+// ====================================================================
+
 export const verifyEmail = catchAsync(async (req, res) => {
   const { email, otp } = req.body;
 
@@ -190,7 +364,7 @@ export const verifyEmail = catchAsync(async (req, res) => {
     throw new AppError(httpStatus.BAD_REQUEST, "Email and OTP are required.");
   }
 
-  const user = await User.findOne({ email });
+  const user = await User.findOne({ email }).select("+verificationInfo.token");
 
   if (!user) {
     throw new AppError(httpStatus.NOT_FOUND, "User not found.");
@@ -231,9 +405,6 @@ export const verifyEmail = catchAsync(async (req, res) => {
   });
 });
 
-/**
- * @description Sends a password reset OTP to the user's email.
- */
 export const forgetPassword = catchAsync(async (req, res) => {
   const { email } = req.body;
   const user = await User.findOne({ email });
@@ -269,9 +440,6 @@ export const forgetPassword = catchAsync(async (req, res) => {
   });
 });
 
-/**
- * @description Resets the user's password using a valid OTP.
- */
 export const resetPassword = catchAsync(async (req, res) => {
   const { email, otp, newPassword } = req.body;
 
@@ -304,16 +472,13 @@ export const resetPassword = catchAsync(async (req, res) => {
   });
 });
 
-/**
- * @description Allows a logged-in user to change their password.
- */
 export const changePassword = catchAsync(async (req, res) => {
   const { oldPassword, newPassword } = req.body;
   const userId = req.user._id;
 
   const user = await User.findById(userId).select("+password");
 
-  if (!user || !(await user.isPasswordMatched(oldPassword, user.password))) {
+  if (!user || !(await user.isPasswordMatched(oldPassword))) {
     throw new AppError(
       httpStatus.UNAUTHORIZED,
       "The old password is not correct."
@@ -321,7 +486,7 @@ export const changePassword = catchAsync(async (req, res) => {
   }
 
   user.password = newPassword;
-  await user.save(); // Pre-save hook will hash the new password
+  await user.save();
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
@@ -331,9 +496,6 @@ export const changePassword = catchAsync(async (req, res) => {
   });
 });
 
-/**
- * @description Generates a new access token using a valid refresh token.
- */
 export const refreshToken = catchAsync(async (req, res) => {
   const { refreshToken } = req.cookies;
 
@@ -342,8 +504,7 @@ export const refreshToken = catchAsync(async (req, res) => {
   }
 
   const decoded = verifyToken(refreshToken, process.env.JWT_REFRESH_SECRET);
-
-  const user = await User.findById(decoded._id);
+  const user = await User.findById(decoded._id).select("+refreshToken");
 
   if (!user || user.refreshToken !== refreshToken) {
     throw new AppError(httpStatus.UNAUTHORIZED, "Invalid refresh token.");
@@ -364,9 +525,6 @@ export const refreshToken = catchAsync(async (req, res) => {
   });
 });
 
-/**
- * @description Handles user logout by clearing the refresh token.
- */
 export const logout = catchAsync(async (req, res) => {
   const { refreshToken } = req.cookies;
 

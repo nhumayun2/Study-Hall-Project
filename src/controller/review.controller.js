@@ -23,7 +23,19 @@ const _updateAverageRating = async (subjectId, subjectModel) => {
     {
       $group: {
         _id: "$reviewSubjectId",
-        averageRating: { $avg: "$rating" },
+        averageRating: {
+          $avg: {
+            $switch: {
+              branches: [
+                { case: { $eq: ["$rating", "Very Satisfied"] }, then: 4 },
+                { case: { $eq: ["$rating", "Satisfied"] }, then: 3 },
+                { case: { $eq: ["$rating", "Neutral"] }, then: 2 },
+                { case: { $eq: ["$rating", "Unsatisfied"] }, then: 1 },
+              ],
+              default: 0,
+            },
+          },
+        },
         totalReviews: { $sum: 1 },
       },
     },
@@ -58,6 +70,8 @@ const _updateAverageRating = async (subjectId, subjectModel) => {
  */
 export const addReview = catchAsync(async (req, res) => {
   const reviewerId = req.user._id;
+  // --- FINAL FIX ---
+  // We now correctly destructure `sessionId` from the request body.
   const {
     sessionId,
     reviewSubjectId,
@@ -67,6 +81,7 @@ export const addReview = catchAsync(async (req, res) => {
     evidence,
   } = req.body;
 
+  // The validation now checks for the `sessionId` variable.
   if (!sessionId || !reviewSubjectId || !reviewSubjectModel || !rating) {
     throw new AppError(
       httpStatus.BAD_REQUEST,
@@ -75,11 +90,11 @@ export const addReview = catchAsync(async (req, res) => {
   }
 
   // 1. Verify the session exists and is completed
-  const session = await Session.findById(sessionId);
-  if (!session) {
+  const sessionDoc = await Session.findById(sessionId);
+  if (!sessionDoc) {
     throw new AppError(httpStatus.NOT_FOUND, "Session not found.");
   }
-  if (session.status !== "Completed") {
+  if (sessionDoc.status !== "Completed") {
     throw new AppError(
       httpStatus.BAD_REQUEST,
       "You can only review a session after it is completed."
@@ -87,7 +102,7 @@ export const addReview = catchAsync(async (req, res) => {
   }
 
   // 2. Verify the reviewer was a participant in the session
-  const isParticipant = session.enrolledStudents.includes(reviewerId);
+  const isParticipant = sessionDoc.enrolledStudents.includes(reviewerId);
   if (!isParticipant) {
     throw new AppError(
       httpStatus.FORBIDDEN,
@@ -98,9 +113,9 @@ export const addReview = catchAsync(async (req, res) => {
   // 3. Verify the subject of the review was part of the session
   const isValidSubject =
     (reviewSubjectModel === "User" &&
-      session.acceptedTutor.toString() === reviewSubjectId) ||
+      sessionDoc.acceptedTutor.toString() === reviewSubjectId) ||
     (reviewSubjectModel === "Location" &&
-      session.location.toString() === reviewSubjectId);
+      sessionDoc.location.toString() === reviewSubjectId);
 
   if (!isValidSubject) {
     throw new AppError(
@@ -112,7 +127,7 @@ export const addReview = catchAsync(async (req, res) => {
   // 4. Check if the user has already reviewed this subject for this session
   const existingReview = await Review.findOne({
     reviewer: reviewerId,
-    sessionId,
+    session: sessionId,
     reviewSubjectId,
   });
   if (existingReview) {
@@ -125,12 +140,12 @@ export const addReview = catchAsync(async (req, res) => {
   // 5. Create the new review
   const newReview = await Review.create({
     reviewer: reviewerId,
-    sessionId,
+    session: sessionId, // <-- Pass the sessionId to the `session` field of the model
     reviewSubjectId,
     reviewSubjectModel,
     rating,
     comment,
-    evidence, // Assuming evidence is handled and URLs are provided
+    evidence,
   });
 
   // 6. Update the average rating for the subject

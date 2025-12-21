@@ -4,6 +4,8 @@ import {
   getAllSessions,
   getSessionDetails,
   getMySessions,
+  getMyCalendarSessions,
+  getSessionsByTutor, // <-- Import the new function
   // Student Request Workflow
   createSessionRequest,
   acceptTutorOffer,
@@ -12,16 +14,27 @@ import {
   bookSessionOffer,
   // Tutor Application Workflow
   applyToSessionRequest,
+  withdrawOffer,
   // Payment Flow
   preauthorizeSessionPayment,
   // In-Session Actions
   cancelSession,
   studentGenerateCheckInQR,
-  tutorScanCheckInQR,
-  tutorGenerateCheckOutQR,
-  studentScanCheckOutQR,
+  studentGenerateCheckOutQR,
+  tutorScanQR,
+  // Admin Debugging Route
+  adminManualCapture,
+  // Edit/Delete/Duplicate
+  updateSession,
+  deleteSession,
+  duplicateSession,
 } from "../controller/session.controller.js";
-import { protect, isStudent, isTutor } from "../middleware/auth.middleware.js";
+import {
+  protect,
+  isStudent,
+  isTutor,
+  isAdmin,
+} from "../middleware/auth.middleware.js";
 import upload from "../middleware/multer.middleware.js";
 
 const router = express.Router();
@@ -30,13 +43,27 @@ const router = express.Router();
 // --- PUBLIC ROUTES (for browsing sessions) ---
 // ====================================================================
 router.get("/", getAllSessions);
-router.get("/:sessionId", getSessionDetails);
+//this is added
+
+// --- NEW: GET ALL SESSIONS FOR A SPECIFIC TUTOR ---
+router.get("/tutor/:tutorId", getSessionsByTutor);
+// --- END NEW ROUTE ---
 
 // ====================================================================
 // --- AUTHENTICATED USER ROUTES ---
 // ====================================================================
+
 router.get("/my-sessions", protect, getMySessions);
+router.get("/my-calendar", protect, getMyCalendarSessions);
 router.patch("/:sessionId/cancel", protect, cancelSession);
+
+router.patch(
+  "/:sessionId/edit",
+  protect,
+  upload.any(), // Use upload.any() for form-data flexibility
+  updateSession
+);
+router.delete("/:sessionId", protect, deleteSession);
 
 // ====================================================================
 // --- STUDENT-SPECIFIC ROUTES ---
@@ -57,7 +84,7 @@ router.post(
   "/offer",
   protect,
   isTutor,
-  upload.single("coverPhoto"),
+  upload.any(), // Use upload.any() for form-data flexibility
   createSessionOffer
 );
 router.post(
@@ -67,11 +94,15 @@ router.post(
   applyToSessionRequest
 );
 
+router.patch("/request/:sessionId/withdraw", protect, isTutor, withdrawOffer);
+
+router.post("/:sessionId/duplicate", protect, isTutor, duplicateSession);
+
 // ====================================================================
-// --- PAYMENT & QR CODE FLOW ---
+// --- PAYMENT & QR CODE FLOW (NEW REFACTORED FLOW) ---
 // ====================================================================
 
-// Payment Pre-authorization
+// Payment Pre-authorization (Student)
 router.post(
   "/:sessionId/preauthorize-payment",
   protect,
@@ -79,22 +110,34 @@ router.post(
   preauthorizeSessionPayment
 );
 
-// QR Code Check-in
+// Student Generates Check-in QR
 router.get(
   "/:sessionId/check-in/generate",
   protect,
   isStudent,
   studentGenerateCheckInQR
 );
-router.post("/check-in/scan", protect, isTutor, tutorScanCheckInQR);
 
-// QR Code Check-out
+// Student Generates Check-out QR
 router.get(
   "/:sessionId/check-out/generate",
   protect,
-  isTutor,
-  tutorGenerateCheckOutQR
+  isStudent,
+  studentGenerateCheckOutQR
 );
-router.post("/check-out/scan", protect, isStudent, studentScanCheckOutQR);
+
+// Tutor Scans EITHER Check-in or Check-out QR
+router.post("/scan-qr", protect, isTutor, tutorScanQR);
+
+// ====================================================================
+// --- ADMIN DEBUGGING ROUTE ---
+// ====================================================================
+router.post("/:sessionId/manual-capture", protect, isAdmin, adminManualCapture);
+
+// ====================================================================
+// --- PARAMETERIZED ROUTE (MUST BE LAST for GET) ---
+// ====================================================================
+// This route must come *after* specific GET routes like /my-sessions, /my-calendar, and /tutor/:tutorId
+router.get("/:sessionId", getSessionDetails);
 
 export default router;

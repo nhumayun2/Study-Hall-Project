@@ -1,12 +1,21 @@
 import mongoose from "mongoose";
 
-/**
- * @description The schema for managing rentable locations.
- * This model holds all details about a physical space that can be booked for a session.
- */
+// Sub-schema for GeoJSON Point for better map integration
+const pointSchema = new mongoose.Schema({
+  type: {
+    type: String,
+    enum: ["Point"],
+    required: true,
+    default: "Point",
+  },
+  coordinates: {
+    type: [Number], // [longitude, latitude]
+    required: true,
+  },
+});
+
 const locationSchema = new mongoose.Schema(
   {
-    // --- Core Information ---
     owner: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
@@ -18,45 +27,27 @@ const locationSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
-    description: {
-      type: String,
-      trim: true,
+    // CORRECTED: Address is now a structured object for searchability.
+    address: {
+      street: { type: String, required: true, trim: true },
+      city: { type: String, required: true, trim: true },
+      state: { type: String, required: true, trim: true },
     },
-    rules: {
-      type: String,
-      trim: true,
+    // GeoJSON field for future map functionality
+    location: {
+      type: pointSchema,
+      index: "2dsphere", // Critical for location-based queries
     },
     photos: [
       {
-        public_id: { type: String, required: true },
-        url: { type: String, required: true },
+        public_id: { type: String },
+        url: { type: String },
+        _id: false,
       },
     ],
-
-    // --- Address & Geolocation ---
-    address: {
-      street: { type: String, required: true },
-      city: { type: String, required: true },
-      state: { type: String, required: true },
-      zipCode: { type: String },
-      // Storing as a GeoJSON Point for geospatial queries (e.g., "find locations within 5km")
-      coordinates: {
-        type: {
-          type: String,
-          enum: ["Point"],
-          default: "Point",
-        },
-        coordinates: {
-          type: [Number], // [longitude, latitude]
-          index: "2dsphere", // Important for location-based searching
-        },
-      },
-    },
-
-    // --- Location Attributes (from Figma filters) ---
     type: {
-      type: String, // e.g., "Cafe", "Library", "Workspace"
-      trim: true,
+      type: String, // e.g., 'Cafe', 'Office', 'Studio'
+      required: true,
     },
     noiseLevel: {
       type: String,
@@ -68,37 +59,20 @@ const locationSchema = new mongoose.Schema(
       required: true,
       min: 1,
     },
+    description: { type: String },
+    // ADDED: The rules field from the Figma design.
+    rules: { type: String },
 
-    // --- Reviews & Ratings ---
-    rating: {
-      type: Number,
-      default: 0,
-      min: 0,
-      max: 5,
-    },
-    totalReviews: {
-      type: Number,
-      default: 0,
-    },
-
-    // --- Admin & Status Management ---
+    // --- Admin & Rating Fields ---
+    rating: { type: Number, default: 0 },
+    totalReviews: { type: Number, default: 0 },
     approvalStatus: {
       type: String,
       enum: ["Pending", "Approved", "Rejected"],
       default: "Pending",
     },
-    isActive: {
-      // Can be toggled by Admin or Owner
-      type: Boolean,
-      default: true,
-    },
-    rejectionReason: {
-      type: String,
-    },
-
-    // Note: Availability for locations can be complex. For now, we assume it's always available
-    // unless a session is booked. A more advanced system could have a dedicated availability model
-    // similar to the tutor's, if locations have specific open/closed hours.
+    isActive: { type: Boolean, default: false },
+    rejectionReason: { type: String },
   },
   {
     timestamps: true,

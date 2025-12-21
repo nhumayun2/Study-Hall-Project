@@ -1,0 +1,4088 @@
+{
+  "info": {
+    "name": "Malcolm Xavie API",
+    "description": "Complete Postman collection for Malcolm Xavie backend routes.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "Authentication",
+      "description": "Sign up, login, social auth, and token lifecycle endpoints.",
+      "item": [
+        {
+          "name": "Register User",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "register"
+              ]
+            },
+            "description": "Create a new user (Student, Tutor, or LocationOwner). Minors can be provided during sign up.",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Jane Doe\",\n  \"username\": \"janedoe01\",\n  \"email\": \"jane@example.com\",\n  \"password\": \"Secret123!\",\n  \"confirmPassword\": \"Secret123!\",\n  \"gender\": \"Female\",\n  \"dob\": \"2000-01-15\",\n  \"role\": \"Student\",\n  \"minors\": [\n    {\n      \"name\": \"Tommy Doe\",\n      \"gender\": \"Male\",\n      \"dob\": \"2015-09-01\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Exchange email/password for an access token and refresh token cookie.",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"jane@example.com\",\n  \"password\": \"Secret123!\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Social Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/social-login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "social-login"
+              ]
+            },
+            "description": "Send a Google or Facebook token to login or create a linked user. Provider must be 'google' or 'facebook'.",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"eyJhbGci...\",\n  \"provider\": \"google\",\n  \"role\": \"Student\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Verify Email OTP",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/verify-email",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "verify-email"
+              ]
+            },
+            "description": "Confirm the OTP delivered by email after registration or login retry.",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"jane@example.com\",\n  \"otp\": \"123456\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Forgot Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/forget-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "forget-password"
+              ]
+            },
+            "description": "Trigger a password reset email containing a one-time OTP.",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"jane@example.com\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Reset Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/reset-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "reset-password"
+              ]
+            },
+            "description": "Update password by submitting the OTP that was emailed via the forgot password step.",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"jane@example.com\",\n  \"otp\": \"123456\",\n  \"newPassword\": \"NewSecret123!\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Change Password",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/change-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "change-password"
+              ]
+            },
+            "description": "Authenticated users can rotate their password by providing the current one.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"oldPassword\": \"Secret123!\",\n  \"newPassword\": \"NewSecret123!\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Refresh Access Token",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/refresh-token",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "refresh-token"
+              ]
+            },
+            "description": "Use the refreshToken cookie to mint a new short-lived access token.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/logout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "logout"
+              ]
+            },
+            "description": "Clears the refresh token cookie and invalidates it server side."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Users & Profiles",
+      "description": "Manage public tutor discovery, personal profile, beneficiaries, and minors.",
+      "item": [
+        {
+          "name": "Get Tutor Public Profile",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/users/tutor/{{tutorId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "tutor",
+                "{{tutorId}}"
+              ],
+              "variable": [
+                {
+                  "key": "tutorId",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Fetch public-facing data for a tutor profile along with computed student counts.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Search Active Tutors",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/users/tutors",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "tutors"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number"
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": "Page size"
+                },
+                {
+                  "key": "search",
+                  "value": "math",
+                  "description": "Optional search across name, major, bio"
+                }
+              ]
+            },
+            "description": "Public search endpoint with pagination, search term, and default 10 items per page.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get My Profile",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/users/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "me"
+              ]
+            },
+            "description": "Returns the authenticated user's profile including stripeAccountId when available."
+          },
+          "response": []
+        },
+        {
+          "name": "Update My Profile",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "multipart/form-data"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users/me/update",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "me",
+                "update"
+              ]
+            },
+            "description": "Send multipart form-data to update profile fields and optionally upload a new avatar. Tutor/location owner fields accept JSON strings.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "name",
+                  "value": "Jane Tutor",
+                  "type": "text"
+                },
+                {
+                  "key": "dob",
+                  "value": "1991-05-12",
+                  "type": "text"
+                },
+                {
+                  "key": "tutorProfile",
+                  "value": "{\"bio\":\"STEM tutor with 10 years experience\",\"major\":\"Physics\"}",
+                  "type": "text"
+                },
+                {
+                  "key": "locationOwnerProfile",
+                  "value": "{\"company\":\"Jane Spaces LLC\",\"website\":\"https://janespaces.com\"}",
+                  "type": "text"
+                },
+                {
+                  "key": "avatar",
+                  "type": "file",
+                  "src": [
+                    "path/to/avatar.jpg"
+                  ]
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Beneficiary Info",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users/me/beneficiary",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "me",
+                "beneficiary"
+              ]
+            },
+            "description": "Set the bank account that will be used for withdrawals (required before requesting payouts).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bankName\": \"Community Bank\",\n  \"accountNumber\": \"1234567890\",\n  \"accountHolder\": \"Jane Tutor\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Add Minor",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users/me/minors",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "me",
+                "minors"
+              ]
+            },
+            "description": "Students can register their minors/children that will be enrolled into sessions.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Lucy Doe\",\n  \"gender\": \"Female\",\n  \"dob\": \"2017-03-15\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Minor",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users/me/minors/{{minorId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "me",
+                "minors",
+                "{{minorId}}"
+              ],
+              "variable": [
+                {
+                  "key": "minorId",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Edit a minor's demographic information.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Lucy Doe\",\n  \"gender\": \"Female\",\n  \"dob\": \"2017-04-01\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Minor",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/users/me/minors/{{minorId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "me",
+                "minors",
+                "{{minorId}}"
+              ],
+              "variable": [
+                {
+                  "key": "minorId",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Remove a minor profile so it can no longer be scheduled into new sessions."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Tutors & Availability",
+      "description": "Apply to be a tutor and keep availability calendars updated.",
+      "item": [
+        {
+          "name": "Apply To Become Tutor",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "multipart/form-data"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/tutors/apply",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "tutors",
+                "apply"
+              ]
+            },
+            "description": "Authenticated users submit occupation, education, and KYC documents. Files are uploaded as multipart form-data.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "occupation",
+                  "value": "Teacher",
+                  "type": "text"
+                },
+                {
+                  "key": "educationLevel",
+                  "value": "Masters",
+                  "type": "text"
+                },
+                {
+                  "key": "major",
+                  "value": "Education",
+                  "type": "text"
+                },
+                {
+                  "key": "experience",
+                  "value": "8 years classroom teaching",
+                  "type": "text"
+                },
+                {
+                  "key": "categoriesToTeach",
+                  "value": "[\"{{mathCategoryId}}\",\"{{scienceCategoryId}}\"]",
+                  "type": "text"
+                },
+                {
+                  "key": "idType",
+                  "value": "Passport",
+                  "type": "text"
+                },
+                {
+                  "key": "idFront",
+                  "type": "file",
+                  "src": [
+                    "path/to/id-front.jpg"
+                  ]
+                },
+                {
+                  "key": "idBack",
+                  "type": "file",
+                  "src": [
+                    "path/to/id-back.jpg"
+                  ]
+                },
+                {
+                  "key": "selfie",
+                  "type": "file",
+                  "src": [
+                    "path/to/selfie.jpg"
+                  ]
+                },
+                {
+                  "key": "supportingDocuments",
+                  "type": "file",
+                  "src": [
+                    "path/to/certification.pdf"
+                  ]
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Set My Availability",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/availability",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "availability"
+              ]
+            },
+            "description": "Tutors maintain both weekly default availability and custom overrides for specific dates.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"defaultAvailability\": [\n    {\n      \"dayOfWeek\": \"Monday\",\n      \"slots\": [\n        {\n          \"start\": \"09:00\",\n          \"end\": \"12:00\"\n        }\n      ]\n    },\n    {\n      \"dayOfWeek\": \"Wednesday\",\n      \"slots\": [\n        {\n          \"start\": \"13:00\",\n          \"end\": \"17:00\"\n        }\n      ]\n    }\n  ],\n  \"customOverrides\": [\n    {\n      \"date\": \"2025-01-15\",\n      \"slots\": [\n        {\n          \"start\": \"10:00\",\n          \"end\": \"14:00\"\n        }\n      ],\n      \"status\": \"available\"\n    },\n    {\n      \"date\": \"2025-01-22\",\n      \"slots\": [],\n      \"status\": \"blocked\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Tutor Availability",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/availability/{{tutorId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "availability",
+                "{{tutorId}}"
+              ],
+              "variable": [
+                {
+                  "key": "tutorId",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Public endpoint for students to view open calendar slots for a specific tutor.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Sessions",
+      "description": "Browse, book, create, and manage tutoring sessions for every role.",
+      "item": [
+        {
+          "name": "Public Discovery",
+          "item": [
+            {
+              "name": "List Active Session Offers",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/sessions",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "sessions"
+                  ],
+                  "query": [
+                    {
+                      "key": "searchTerm",
+                      "value": "math",
+                      "description": "Optional fuzzy search on title"
+                    },
+                    {
+                      "key": "category",
+                      "value": "{{categoryId}}",
+                      "description": "Filter by category ID"
+                    },
+                    {
+                      "key": "subCategory",
+                      "value": "{{subCategoryId}}",
+                      "description": "Filter by sub-category ID"
+                    },
+                    {
+                      "key": "page",
+                      "value": "1",
+                      "description": "Page number"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10",
+                      "description": "Items per page"
+                    }
+                  ]
+                },
+                "description": "Public catalog of tutor-created session offers. Supports search and pagination.",
+                "auth": {
+                  "type": "noauth"
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "List Sessions By Tutor",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/sessions/tutor/{{tutorId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "sessions",
+                    "tutor",
+                    "{{tutorId}}"
+                  ],
+                  "variable": [
+                    {
+                      "key": "tutorId",
+                      "value": "",
+                      "description": ""
+                    }
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1",
+                      "description": "Page number"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10",
+                      "description": "Items per page"
+                    }
+                  ]
+                },
+                "description": "Publicly view all active offers created by a given tutor with pagination.",
+                "auth": {
+                  "type": "noauth"
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get Session Details",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/sessions/{{sessionId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "sessions",
+                    "{{sessionId}}"
+                  ],
+                  "variable": [
+                    {
+                      "key": "sessionId",
+                      "value": "",
+                      "description": ""
+                    }
+                  ]
+                },
+                "description": "Fetch a fully populated session record including tutor info, location, and enrollments.",
+                "auth": {
+                  "type": "noauth"
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Personal Views",
+          "item": [
+            {
+              "name": "My Sessions",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/sessions/my-sessions",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "sessions",
+                    "my-sessions"
+                  ],
+                  "query": [
+                    {
+                      "key": "tab",
+                      "value": "Upcoming",
+                      "description": "Upcoming | Request | History"
+                    },
+                    {
+                      "key": "status",
+                      "value": "Completed",
+                      "description": "Filter within history tab"
+                    },
+                    {
+                      "key": "page",
+                      "value": "1",
+                      "description": "Page number"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10",
+                      "description": "Items per page"
+                    }
+                  ]
+                },
+                "description": "Role-aware sessions list. Use the tab parameter to switch between upcoming/request/history views."
+              },
+              "response": []
+            },
+            {
+              "name": "My Calendar Sessions",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/sessions/my-calendar",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "sessions",
+                    "my-calendar"
+                  ],
+                  "query": [
+                    {
+                      "key": "view",
+                      "value": "week",
+                      "description": "day | week | month"
+                    },
+                    {
+                      "key": "targetDate",
+                      "value": "2025-01-15",
+                      "description": "ISO date to center the view"
+                    }
+                  ]
+                },
+                "description": "Calendar friendly view that returns sessions for the selected day/week/month window."
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Student Booking Flow",
+          "item": [
+            {
+              "name": "Create Session Request",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/sessions/request",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "sessions",
+                    "request"
+                  ]
+                },
+                "description": "Students post a request for tutors to apply to. Tags and schedule can be sent as real JSON.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"title\": \"STEM Mentoring for Teens\",\n  \"description\": \"Looking for a weekly 90-minute robotics coaching session.\",\n  \"category\": \"{{categoryId}}\",\n  \"subCategory\": \"{{subCategoryId}}\",\n  \"tags\": [\n    \"robotics\",\n    \"coding\"\n  ],\n  \"schedule\": {\n    \"date\": \"2025-02-10\",\n    \"startTime\": \"15:00\",\n    \"duration\": 90,\n    \"timeZone\": \"America/New_York\"\n  },\n  \"price\": 75,\n  \"maxStudents\": 3,\n  \"location\": \"{{preferredLocationId}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Accept Tutor Offer",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/sessions/request/{{sessionId}}/accept-tutor",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "sessions",
+                    "request",
+                    "{{sessionId}}",
+                    "accept-tutor"
+                  ],
+                  "variable": [
+                    {
+                      "key": "sessionId",
+                      "value": "",
+                      "description": ""
+                    }
+                  ]
+                },
+                "description": "Student selects a tutor that applied to the request and finalizes enrollment for specific minors.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"tutorId\": \"{{tutorId}}\",\n  \"paymentIntentId\": \"{{paymentIntentId}}\",\n  \"minorIds\": [\n    \"{{minorId1}}\",\n    \"{{minorId2}}\"\n  ]\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Book Tutor Offer",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/sessions/offer/{{sessionId}}/book",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "sessions",
+                    "offer",
+                    "{{sessionId}}",
+                    "book"
+                  ],
+                  "variable": [
+                    {
+                      "key": "sessionId",
+                      "value": "",
+                      "description": ""
+                    }
+                  ]
+                },
+                "description": "Students enroll their minors directly into an active tutor-created offer. Requires payment intent for paid offers.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"paymentIntentId\": \"{{paymentIntentId}}\",\n  \"minorIds\": [\n    \"{{minorId1}}\"\n  ]\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Cancel Session",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/sessions/{{sessionId}}/cancel",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "sessions",
+                    "{{sessionId}}",
+                    "cancel"
+                  ],
+                  "variable": [
+                    {
+                      "key": "sessionId",
+                      "value": "",
+                      "description": ""
+                    }
+                  ]
+                },
+                "description": "Either tutors or parents involved in a session can cancel it. Tutors trigger full refunds, students incur platform fee.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"reason\": \"Family emergency. Please release our spot.\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Tutor Workflow",
+          "item": [
+            {
+              "name": "Create Session Offer",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "multipart/form-data"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/sessions/offer",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "sessions",
+                    "offer"
+                  ]
+                },
+                "description": "Tutors craft public offers using multipart form-data. Schedule and tags are JSON strings; coverPhoto is mandatory.",
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "title",
+                      "value": "Robotics Bootcamp",
+                      "type": "text"
+                    },
+                    {
+                      "key": "description",
+                      "value": "Six week cohort focused on LEGO robotics.",
+                      "type": "text"
+                    },
+                    {
+                      "key": "category",
+                      "value": "{{categoryId}}",
+                      "type": "text"
+                    },
+                    {
+                      "key": "subCategory",
+                      "value": "{{subCategoryId}}",
+                      "type": "text"
+                    },
+                    {
+                      "key": "price",
+                      "value": "120",
+                      "type": "text"
+                    },
+                    {
+                      "key": "maxStudents",
+                      "value": "8",
+                      "type": "text"
+                    },
+                    {
+                      "key": "location",
+                      "value": "{{locationId}}",
+                      "type": "text"
+                    },
+                    {
+                      "key": "schedule",
+                      "value": "{\"date\":\"2025-03-04\",\"startTime\":\"10:00\",\"duration\":120,\"timeZone\":\"America/New_York\"}",
+                      "type": "text"
+                    },
+                    {
+                      "key": "tags",
+                      "value": "[\"robotics\",\"coding\",\"engineering\"]",
+                      "type": "text"
+                    },
+                    {
+                      "key": "cancellationPolicy",
+                      "value": "15% fee within 48 hours.",
+                      "type": "text"
+                    },
+                    {
+                      "key": "tutorNote",
+                      "value": "Bring laptops if possible.",
+                      "type": "text"
+                    },
+                    {
+                      "key": "coverPhoto",
+                      "type": "file",
+                      "src": [
+                        "path/to/cover-photo.jpg"
+                      ]
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Apply To Session Request",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/sessions/request/{{sessionId}}/apply",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "sessions",
+                    "request",
+                    "{{sessionId}}",
+                    "apply"
+                  ],
+                  "variable": [
+                    {
+                      "key": "sessionId",
+                      "value": "",
+                      "description": ""
+                    }
+                  ]
+                },
+                "description": "Tutors respond to a student-created request by quoting an offer price per minor.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"offerPrice\": 90\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Withdraw Session Application",
+              "request": {
+                "method": "PATCH",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/sessions/request/{{sessionId}}/withdraw",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "sessions",
+                    "request",
+                    "{{sessionId}}",
+                    "withdraw"
+                  ],
+                  "variable": [
+                    {
+                      "key": "sessionId",
+                      "value": "",
+                      "description": ""
+                    }
+                  ]
+                },
+                "description": "Tutor withdraws their pending application to a student request."
+              },
+              "response": []
+            },
+            {
+              "name": "Duplicate Session Offer",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/sessions/{{sessionId}}/duplicate",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "sessions",
+                    "{{sessionId}}",
+                    "duplicate"
+                  ],
+                  "variable": [
+                    {
+                      "key": "sessionId",
+                      "value": "",
+                      "description": ""
+                    }
+                  ]
+                },
+                "description": "Quickly copy an existing offer to reopen it for a new cohort. Only available for the tutor that created it."
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Attendance & QR Workflow",
+          "item": [
+            {
+              "name": "Generate Student Check-In QR",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/sessions/{{sessionId}}/check-in/generate",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "sessions",
+                    "{{sessionId}}",
+                    "check-in",
+                    "generate"
+                  ],
+                  "variable": [
+                    {
+                      "key": "sessionId",
+                      "value": "",
+                      "description": ""
+                    }
+                  ]
+                },
+                "description": "Student requests a time-limited QR code for a specific minor. Send the minorId in the body even though the route is GET.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"minorId\": \"{{minorId}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Generate Student Check-Out QR",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/sessions/{{sessionId}}/check-out/generate",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "sessions",
+                    "{{sessionId}}",
+                    "check-out",
+                    "generate"
+                  ],
+                  "variable": [
+                    {
+                      "key": "sessionId",
+                      "value": "",
+                      "description": ""
+                    }
+                  ]
+                },
+                "description": "Same as check-in but used after the session is complete.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"minorId\": \"{{minorId}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Tutor Scan QR",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/sessions/scan-qr",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "sessions",
+                    "scan-qr"
+                  ]
+                },
+                "description": "Tutors scan QR codes to check minors in or out. Token comes from the student's QR generation payload.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"token\": \"{{qrToken}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Lifecycle & Maintenance",
+          "item": [
+            {
+              "name": "Edit Session",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "multipart/form-data"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/sessions/{{sessionId}}/edit",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "sessions",
+                    "{{sessionId}}",
+                    "edit"
+                  ],
+                  "variable": [
+                    {
+                      "key": "sessionId",
+                      "value": "",
+                      "description": ""
+                    }
+                  ]
+                },
+                "description": "Creators can edit their session details prior to any enrollments. Multipart form allows updating cover photo.",
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "title",
+                      "value": "Robotics Bootcamp (Updated)",
+                      "type": "text"
+                    },
+                    {
+                      "key": "price",
+                      "value": "130",
+                      "type": "text"
+                    },
+                    {
+                      "key": "schedule",
+                      "value": "{\"date\":\"2025-03-11\",\"startTime\":\"10:00\",\"duration\":150,\"timeZone\":\"America/New_York\"}",
+                      "type": "text"
+                    },
+                    {
+                      "key": "coverPhoto",
+                      "type": "file",
+                      "src": [
+                        "path/to/new-cover.jpg"
+                      ]
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Delete Session",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/sessions/{{sessionId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "sessions",
+                    "{{sessionId}}"
+                  ],
+                  "variable": [
+                    {
+                      "key": "sessionId",
+                      "value": "",
+                      "description": ""
+                    }
+                  ]
+                },
+                "description": "Remove a session that has never been booked. Otherwise cancel it instead."
+              },
+              "response": []
+            },
+            {
+              "name": "Manual Payment Capture (Admin)",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/sessions/{{sessionId}}/manual-capture",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "sessions",
+                    "{{sessionId}}",
+                    "manual-capture"
+                  ],
+                  "variable": [
+                    {
+                      "key": "sessionId",
+                      "value": "",
+                      "description": ""
+                    }
+                  ]
+                },
+                "description": "Admin-only backdoor to mark a booked session as completed and capture held payments."
+              },
+              "response": []
+            },
+            {
+              "name": "Deprecated Preauthorize Endpoint",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/sessions/{{sessionId}}/preauthorize-payment",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "sessions",
+                    "{{sessionId}}",
+                    "preauthorize-payment"
+                  ],
+                  "variable": [
+                    {
+                      "key": "sessionId",
+                      "value": "",
+                      "description": ""
+                    }
+                  ]
+                },
+                "description": "Deprecated in favor of /financials/sessions/:sessionId/create-payment-intent. Included for backwards compatibility.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"note\": \"Use /financials/sessions/:sessionId/create-payment-intent instead.\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Locations",
+      "description": "Location owners can create venues while the public can browse approved spaces.",
+      "item": [
+        {
+          "name": "Search Locations",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/locations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "locations"
+              ],
+              "query": [
+                {
+                  "key": "searchTerm",
+                  "value": "Studio",
+                  "description": "Fuzzy text search"
+                },
+                {
+                  "key": "city",
+                  "value": "Austin",
+                  "description": "Exact city match"
+                },
+                {
+                  "key": "state",
+                  "value": "TX",
+                  "description": "Exact state match"
+                },
+                {
+                  "key": "noiseLevel",
+                  "value": "Quiet",
+                  "description": "Quiet | Moderate | Loud"
+                },
+                {
+                  "key": "minCapacity",
+                  "value": "10",
+                  "description": "Minimum seating capacity"
+                }
+              ]
+            },
+            "description": "Browse approved & active locations with optional filters.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Location Details",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/locations/{{locationId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "locations",
+                "{{locationId}}"
+              ],
+              "variable": [
+                {
+                  "key": "locationId",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Publicly view a single approved location and its owner info.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Location Owner Homepage Snapshot",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/locations/my-homepage",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "locations",
+                "my-homepage"
+              ]
+            },
+            "description": "Returns stats such as today's sessions, total income, and pending payouts for the location owner."
+          },
+          "response": []
+        },
+        {
+          "name": "My Locations",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/locations/my-locations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "locations",
+                "my-locations"
+              ]
+            },
+            "description": "Authenticated location owners list every venue they have created."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Location",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "multipart/form-data"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/locations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "locations"
+              ]
+            },
+            "description": "Multipart endpoint used by location owners. Address and location fields must be JSON strings.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "name",
+                  "value": "Downtown Learning Lab",
+                  "type": "text"
+                },
+                {
+                  "key": "description",
+                  "value": "Sunlit classrooms equipped with whiteboards.",
+                  "type": "text"
+                },
+                {
+                  "key": "type",
+                  "value": "Studio",
+                  "type": "text"
+                },
+                {
+                  "key": "maxCapacity",
+                  "value": "20",
+                  "type": "text"
+                },
+                {
+                  "key": "noiseLevel",
+                  "value": "Quiet",
+                  "type": "text"
+                },
+                {
+                  "key": "rules",
+                  "value": "No food in robotics area.",
+                  "type": "text"
+                },
+                {
+                  "key": "address",
+                  "value": "{\"street\":\"123 Main St\",\"city\":\"Austin\",\"state\":\"TX\",\"zip\":\"78701\"}",
+                  "type": "text"
+                },
+                {
+                  "key": "location",
+                  "value": "{\"coordinates\":[-97.7431,30.2672]}",
+                  "type": "text"
+                },
+                {
+                  "key": "photos",
+                  "type": "file",
+                  "src": [
+                    "path/to/photo-1.jpg"
+                  ]
+                },
+                {
+                  "key": "photos",
+                  "type": "file",
+                  "src": [
+                    "path/to/photo-2.jpg"
+                  ]
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Location",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/locations/{{locationId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "locations",
+                "{{locationId}}"
+              ],
+              "variable": [
+                {
+                  "key": "locationId",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Send JSON body with any fields that need to change. address/location should still be JSON strings for parsing.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Downtown Learning Lab - Suite B\",\n  \"address\": \"{\\\"street\\\":\\\"123 Main St\\\",\\\"city\\\":\\\"Austin\\\",\\\"state\\\":\\\"TX\\\",\\\"zip\\\":\\\"78701\\\"}\",\n  \"location\": \"{\\\"coordinates\\\":[-97.7431,30.2672]}\",\n  \"maxCapacity\": 30,\n  \"rules\": \"Food only in lounge.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Home & Discovery",
+      "description": "Personalized home dashboards and public discovery helpers.",
+      "item": [
+        {
+          "name": "Homepage Data",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/home",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "home"
+              ]
+            },
+            "description": "Returns role-specific cards: students get categories/popular tutors, tutors get stats & leads, owners get venue KPIs."
+          },
+          "response": []
+        },
+        {
+          "name": "My Panel",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/home/my-panel",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "home",
+                "my-panel"
+              ]
+            },
+            "description": "Tutor/location owner specific 'My Panel' data such as availability, sessions, reviews, and owned locations."
+          },
+          "response": []
+        },
+        {
+          "name": "Public Categories",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/home/categories",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "home",
+                "categories"
+              ]
+            },
+            "description": "Public endpoint listing every active category along with the count of active session offers inside each.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Financials & Wallet",
+      "description": "Stripe payment intents, wallet overviews, and withdrawal requests for tutors/location owners.",
+      "item": [
+        {
+          "name": "Create Payment Intent",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/financials/sessions/{{sessionId}}/create-payment-intent",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "financials",
+                "sessions",
+                "{{sessionId}}",
+                "create-payment-intent"
+              ],
+              "variable": [
+                {
+                  "key": "sessionId",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Students pre-authorize payments for an offer/request. Provide numberOfMinors; tutorId is required when booking a request.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"numberOfMinors\": 2,\n  \"tutorId\": \"{{tutorId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Confirm Payment Intent",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/financials/confirm-payment",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "financials",
+                "confirm-payment"
+              ]
+            },
+            "description": "Confirm a previously created payment intent. In sandbox this will use Stripe test cards and leave the payment in requires_capture.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"paymentIntentId\": \"{{paymentIntentId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Wallet Withdrawal Request (Financials)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/financials/request-withdrawal",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "financials",
+                "request-withdrawal"
+              ]
+            },
+            "description": "Tutors/location owners initiate a withdrawal that moves funds from available to pending and notifies admins.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 150\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Financial Overview",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/financials/overview",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "financials",
+                "overview"
+              ]
+            },
+            "description": "Quick snapshot of wallet balance, pending balance, and latest 10 transactions for the authenticated user."
+          },
+          "response": []
+        },
+        {
+          "name": "Transaction History",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/financials/transactions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "financials",
+                "transactions"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number"
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": "Items per page"
+                }
+              ]
+            },
+            "description": "Paginated ledger of all transactions for the current user."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Withdrawals",
+      "description": "Standalone withdrawal routes mounted at /api/v1/withdrawals.",
+      "item": [
+        {
+          "name": "Request Withdrawal",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/withdrawals/request",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "withdrawals",
+                "request"
+              ]
+            },
+            "description": "Alternative withdrawal endpoint (functionally similar to financials). Amount must respect minimum limits and beneficiary must exist.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 250\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "My Withdrawal History",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/withdrawals/my-history",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "withdrawals",
+                "my-history"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number"
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": "Items per page"
+                }
+              ]
+            },
+            "description": "Paginated list of all withdrawal requests initiated by the tutor/location owner."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Reviews",
+      "description": "Students leave feedback for tutors or locations after a completed session.",
+      "item": [
+        {
+          "name": "Get Reviews For Subject",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/reviews/subject/{{subjectId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reviews",
+                "subject",
+                "{{subjectId}}"
+              ],
+              "variable": [
+                {
+                  "key": "subjectId",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Publicly fetch reviews for either a tutor (User) or location. subjectId is the tutor user ID or location ID.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Add Review",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reviews",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reviews"
+              ]
+            },
+            "description": "Students can only review after the session is completed and they participated. rating accepts textual scale.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sessionId\": \"{{sessionId}}\",\n  \"reviewSubjectId\": \"{{tutorOrLocationId}}\",\n  \"reviewSubjectModel\": \"User\",\n  \"rating\": \"Very Satisfied\",\n  \"comment\": \"My child loved the pace and clarity of the lessons!\",\n  \"evidence\": []\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "User Reports",
+      "description": "Users can report misconduct; lightweight admin helpers exist on the same route group.",
+      "item": [
+        {
+          "name": "Create Report",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reports",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports"
+              ]
+            },
+            "description": "Students/tutors can flag another user or entity. reportedUser should not equal the reporter's ID.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reportedUser\": \"{{userId}}\",\n  \"reason\": \"Inappropriate behavior\",\n  \"description\": \"Tutor did not show up for the session twice.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Reports (Legacy Admin)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/reports/all",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "all"
+              ]
+            },
+            "description": "Admin-only helper exposed on the general route before the dedicated /admin/reports endpoints existed."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Report Status (Legacy Admin)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reports/status/{{id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "status",
+                "{{id}}"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Admin updates report status directly from this legacy route.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"Resolved\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Notifications",
+      "description": "CRUD endpoints around in-app notifications.",
+      "item": [
+        {
+          "name": "Send Test Notification",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/notifications/send-test",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "notifications",
+                "send-test"
+              ]
+            },
+            "description": "Debug helper for admins/support to push arbitrary notifications. Requires auth even though not limited to Admin middleware.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"recipientId\": \"{{userId}}\",\n  \"type\": \"session\",\n  \"title\": \"Session Reminder\",\n  \"message\": \"Your robotics class starts in 2 hours.\",\n  \"relatedId\": \"{{sessionId}}\",\n  \"onModel\": \"Session\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "My Notifications",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/notifications/my-notifications",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "notifications",
+                "my-notifications"
+              ],
+              "query": [
+                {
+                  "key": "filter",
+                  "value": "unread",
+                  "description": "unread for only unseen notifications"
+                }
+              ]
+            },
+            "description": "List notifications for the logged-in user. Filter to unread items if desired."
+          },
+          "response": []
+        },
+        {
+          "name": "Mark Notification Read",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/notifications/mark-read/{{id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "notifications",
+                "mark-read",
+                "{{id}}"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Mark a notification as read."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Notification",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/notifications/delete/{{id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "notifications",
+                "delete",
+                "{{id}}"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Remove a notification entirely."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Chat & Messaging",
+      "description": "Simple conversation API that supports messaging between two participants.",
+      "item": [
+        {
+          "name": "Send Message",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/chat",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "chat"
+              ]
+            },
+            "description": "Send a message to another user and automatically create a conversation if it does not exist.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"recipientId\": \"{{userId}}\",\n  \"message\": \"Hello! Do you have availability next week?\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "My Conversations",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/chat",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "chat"
+              ]
+            },
+            "description": "List every conversation the authenticated user participates in, sorted by recent activity."
+          },
+          "response": []
+        },
+        {
+          "name": "Conversation History",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/chat/{{recipientId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "chat",
+                "{{recipientId}}"
+              ],
+              "variable": [
+                {
+                  "key": "recipientId",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Convenience endpoint to fetch history with a specific recipient. Sender metadata is populated per message."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Contact Us",
+      "description": "Public contact form submission routed to the support inbox.",
+      "item": [
+        {
+          "name": "Submit Contact Form",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/contact",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "contact"
+              ]
+            },
+            "description": "Send inquiries or support requests without authentication.",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Payment Issue\",\n  \"email\": \"guardian@example.com\",\n  \"description\": \"Our session charge failed twice. Could someone assist?\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Stripe Onboarding",
+      "description": "Stripe Connect Express onboarding lifecycle for tutors and location owners.",
+      "item": [
+        {
+          "name": "Create Onboarding Link",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/onboarding/create-link",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "onboarding",
+                "create-link"
+              ]
+            },
+            "description": "Creates or reuses the user's Stripe Express account and generates a link to finish onboarding."
+          },
+          "response": []
+        },
+        {
+          "name": "Verify Onboarding Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/onboarding/verify-status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "onboarding",
+                "verify-status"
+              ]
+            },
+            "description": "Check whether the user has completed onboarding (details submitted + charges enabled flags)."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Admin Suite",
+      "description": "All admin-only endpoints are grouped by responsibility.",
+      "item": [
+        {
+          "name": "User Management",
+          "item": [
+            {
+              "name": "List Users",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/users",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "users"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1",
+                      "description": "Page number"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "20",
+                      "description": "Items per page"
+                    },
+                    {
+                      "key": "role",
+                      "value": "Tutor",
+                      "description": "Filter by role"
+                    },
+                    {
+                      "key": "status",
+                      "value": "Active",
+                      "description": "Filter by status"
+                    },
+                    {
+                      "key": "search",
+                      "value": "jane",
+                      "description": "Search name/email"
+                    }
+                  ]
+                },
+                "description": "Paginated list of users with optional role/status/search filters."
+              },
+              "response": []
+            },
+            {
+              "name": "Get User Details",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/users/{{userId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "users",
+                    "{{userId}}"
+                  ],
+                  "variable": [
+                    {
+                      "key": "userId",
+                      "value": "",
+                      "description": ""
+                    }
+                  ]
+                },
+                "description": "Detailed information for a single user (password/refreshToken omitted)."
+              },
+              "response": []
+            },
+            {
+              "name": "Update User Status",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/users/{{userId}}/status",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "users",
+                    "{{userId}}",
+                    "status"
+                  ],
+                  "variable": [
+                    {
+                      "key": "userId",
+                      "value": "",
+                      "description": ""
+                    }
+                  ]
+                },
+                "description": "Change a user's status (Active, Inactive, Blocked). Admin accounts cannot be changed.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"status\": \"Blocked\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Tutor Applications",
+          "item": [
+            {
+              "name": "List Tutor Applications",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/applications/tutors",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "applications",
+                    "tutors"
+                  ],
+                  "query": [
+                    {
+                      "key": "status",
+                      "value": "Pending",
+                      "description": "Pending | Approved | Rejected"
+                    },
+                    {
+                      "key": "page",
+                      "value": "1",
+                      "description": "Page number"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10",
+                      "description": "Items per page"
+                    }
+                  ]
+                },
+                "description": "Queue of tutor onboarding applications. Defaults to Pending."
+              },
+              "response": []
+            },
+            {
+              "name": "Get Tutor Application Details",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/applications/tutors/{{applicationId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "applications",
+                    "tutors",
+                    "{{applicationId}}"
+                  ],
+                  "variable": [
+                    {
+                      "key": "applicationId",
+                      "value": "",
+                      "description": ""
+                    }
+                  ]
+                },
+                "description": "Full document including uploaded KYC URLs."
+              },
+              "response": []
+            },
+            {
+              "name": "Approve Tutor Application",
+              "request": {
+                "method": "PATCH",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/applications/tutors/{{applicationId}}/approve",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "applications",
+                    "tutors",
+                    "{{applicationId}}",
+                    "approve"
+                  ],
+                  "variable": [
+                    {
+                      "key": "applicationId",
+                      "value": "",
+                      "description": ""
+                    }
+                  ]
+                },
+                "description": "Promotes the associated user to Tutor and marks the application as approved."
+              },
+              "response": []
+            },
+            {
+              "name": "Reject Tutor Application",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/applications/tutors/{{applicationId}}/reject",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "applications",
+                    "tutors",
+                    "{{applicationId}}",
+                    "reject"
+                  ],
+                  "variable": [
+                    {
+                      "key": "applicationId",
+                      "value": "",
+                      "description": ""
+                    }
+                  ]
+                },
+                "description": "Reject and include a reason to communicate back to the applicant.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"reason\": \"We could not verify your credentials. Please resubmit.\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Session Oversight",
+          "item": [
+            {
+              "name": "List Sessions (Admin)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/sessions",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "sessions"
+                  ],
+                  "query": [
+                    {
+                      "key": "status",
+                      "value": "Booked",
+                      "description": "Filter by status"
+                    },
+                    {
+                      "key": "paymentStatus",
+                      "value": "Captured",
+                      "description": "Filter by payment state"
+                    },
+                    {
+                      "key": "isBlocked",
+                      "value": "false",
+                      "description": "true | false"
+                    },
+                    {
+                      "key": "search",
+                      "value": "Robotics",
+                      "description": "Search titles or people"
+                    },
+                    {
+                      "key": "page",
+                      "value": "1",
+                      "description": "Page number"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "20",
+                      "description": "Items per page"
+                    }
+                  ]
+                },
+                "description": "Powerful listing of every session (requests and offers) with search & filtering by status/payment/block states."
+              },
+              "response": []
+            },
+            {
+              "name": "Get Session Details (Admin)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/sessions/{{sessionId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "sessions",
+                    "{{sessionId}}"
+                  ],
+                  "variable": [
+                    {
+                      "key": "sessionId",
+                      "value": "",
+                      "description": ""
+                    }
+                  ]
+                },
+                "description": "Inspect a single session including location, creator, tutor, and cancellation details."
+              },
+              "response": []
+            },
+            {
+              "name": "Get Session Reviews (Admin)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/sessions/{{sessionId}}/reviews",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "sessions",
+                    "{{sessionId}}",
+                    "reviews"
+                  ],
+                  "variable": [
+                    {
+                      "key": "sessionId",
+                      "value": "",
+                      "description": ""
+                    }
+                  ]
+                },
+                "description": "View tutor vs location reviews tied to this session."
+              },
+              "response": []
+            },
+            {
+              "name": "Update Session Status (Admin)",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/sessions/{{sessionId}}/status",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "sessions",
+                    "{{sessionId}}",
+                    "status"
+                  ],
+                  "variable": [
+                    {
+                      "key": "sessionId",
+                      "value": "",
+                      "description": ""
+                    }
+                  ]
+                },
+                "description": "Force a status change (e.g., Cancelled) and optionally include a reason if canceling.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"status\": \"Cancelled\",\n  \"reason\": \"Violates safety guidelines\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Block/Unblock Session",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/sessions/{{sessionId}}/block",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "sessions",
+                    "{{sessionId}}",
+                    "block"
+                  ],
+                  "variable": [
+                    {
+                      "key": "sessionId",
+                      "value": "",
+                      "description": ""
+                    }
+                  ]
+                },
+                "description": "Toggle the isBlocked flag. Provide a reason when blocking.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"isBlocked\": true,\n  \"reason\": \"Content violates policies.\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Location Oversight",
+          "item": [
+            {
+              "name": "List Locations (Admin)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/locations",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "locations"
+                  ],
+                  "query": [
+                    {
+                      "key": "approvalStatus",
+                      "value": "Pending",
+                      "description": "Pending | Approved | Rejected"
+                    },
+                    {
+                      "key": "isActive",
+                      "value": "true",
+                      "description": "true | false"
+                    },
+                    {
+                      "key": "search",
+                      "value": "Downtown",
+                      "description": "Search names/owners"
+                    },
+                    {
+                      "key": "page",
+                      "value": "1",
+                      "description": "Page number"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "20",
+                      "description": "Items per page"
+                    }
+                  ]
+                },
+                "description": "Admin grid of all locations with approval + active filters."
+              },
+              "response": []
+            },
+            {
+              "name": "Get Location Details (Admin)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/locations/{{locationId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "locations",
+                    "{{locationId}}"
+                  ],
+                  "variable": [
+                    {
+                      "key": "locationId",
+                      "value": "",
+                      "description": ""
+                    }
+                  ]
+                },
+                "description": "Full details plus owner contact info."
+              },
+              "response": []
+            },
+            {
+              "name": "Location Session History",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/locations/{{locationId}}/history",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "locations",
+                    "{{locationId}}",
+                    "history"
+                  ],
+                  "variable": [
+                    {
+                      "key": "locationId",
+                      "value": "",
+                      "description": ""
+                    }
+                  ],
+                  "query": [
+                    {
+                      "key": "status",
+                      "value": "Completed",
+                      "description": "Filter by session status"
+                    },
+                    {
+                      "key": "page",
+                      "value": "1",
+                      "description": "Page number"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10",
+                      "description": "Items per page"
+                    }
+                  ]
+                },
+                "description": "Sessions held at this location with optional status filter."
+              },
+              "response": []
+            },
+            {
+              "name": "Approve Location",
+              "request": {
+                "method": "PATCH",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/locations/{{locationId}}/approve",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "locations",
+                    "{{locationId}}",
+                    "approve"
+                  ],
+                  "variable": [
+                    {
+                      "key": "locationId",
+                      "value": "",
+                      "description": ""
+                    }
+                  ]
+                },
+                "description": "Marks a location as approved and makes it active."
+              },
+              "response": []
+            },
+            {
+              "name": "Reject Location",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/locations/{{locationId}}/reject",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "locations",
+                    "{{locationId}}",
+                    "reject"
+                  ],
+                  "variable": [
+                    {
+                      "key": "locationId",
+                      "value": "",
+                      "description": ""
+                    }
+                  ]
+                },
+                "description": "Sends the location back with a specific rejection reason.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"reason\": \"Photos do not meet our quality requirements.\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Toggle Location Active State",
+              "request": {
+                "method": "PATCH",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/locations/{{locationId}}/toggle-active",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "locations",
+                    "{{locationId}}",
+                    "toggle-active"
+                  ],
+                  "variable": [
+                    {
+                      "key": "locationId",
+                      "value": "",
+                      "description": ""
+                    }
+                  ]
+                },
+                "description": "Enable or disable public visibility for an approved location."
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Profit Dashboard",
+          "item": [
+            {
+              "name": "Profit Metrics",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/profit/metrics",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "profit",
+                    "metrics"
+                  ]
+                },
+                "description": "High-level totals for platform/tutor/location owner earnings."
+              },
+              "response": []
+            },
+            {
+              "name": "Profit Transactions",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/profit/transactions",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "profit",
+                    "transactions"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1",
+                      "description": "Page number"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "20",
+                      "description": "Items per page"
+                    },
+                    {
+                      "key": "search",
+                      "value": "Robotics",
+                      "description": "Search session titles or participants"
+                    }
+                  ]
+                },
+                "description": "Completed sessions with calculated earnings for each party."
+              },
+              "response": []
+            },
+            {
+              "name": "Profit Details For Session",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/profit/transactions/{{sessionId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "profit",
+                    "transactions",
+                    "{{sessionId}}"
+                  ],
+                  "variable": [
+                    {
+                      "key": "sessionId",
+                      "value": "",
+                      "description": ""
+                    }
+                  ]
+                },
+                "description": "Drill down on a single completed session's profit distribution."
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Transaction Logs",
+          "item": [
+            {
+              "name": "List Transactions",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/transactions",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "transactions"
+                  ],
+                  "query": [
+                    {
+                      "key": "type",
+                      "value": "Payment",
+                      "description": "Payment | Refund | Withdrawal etc."
+                    },
+                    {
+                      "key": "status",
+                      "value": "Completed",
+                      "description": "Completed | Pending | Failed"
+                    },
+                    {
+                      "key": "search",
+                      "value": "pi_",
+                      "description": "Search gateway IDs or descriptions"
+                    },
+                    {
+                      "key": "page",
+                      "value": "1",
+                      "description": "Page number"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "25",
+                      "description": "Items per page"
+                    }
+                  ]
+                },
+                "description": "Full ledger with optional search, type, and status filters."
+              },
+              "response": []
+            },
+            {
+              "name": "Get Transaction Details",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/transactions/{{transactionId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "transactions",
+                    "{{transactionId}}"
+                  ],
+                  "variable": [
+                    {
+                      "key": "transactionId",
+                      "value": "",
+                      "description": ""
+                    }
+                  ]
+                },
+                "description": "Inspect a single transaction referencing users and sessions."
+              },
+              "response": []
+            },
+            {
+              "name": "Process Refund",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/transactions/{{transactionId}}/refund",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "transactions",
+                    "{{transactionId}}",
+                    "refund"
+                  ],
+                  "variable": [
+                    {
+                      "key": "transactionId",
+                      "value": "",
+                      "description": ""
+                    }
+                  ]
+                },
+                "description": "Create a refund transaction. Provide amount (+ reason). TODO note: actual Stripe refund integration required.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"refundAmount\": 45,\n  \"reason\": \"Student cancelled outside allowed window.\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Reports & Moderation",
+          "item": [
+            {
+              "name": "List Reports (Admin)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/reports",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "reports"
+                  ],
+                  "query": [
+                    {
+                      "key": "status",
+                      "value": "Open",
+                      "description": "Open | Resolved | Closed"
+                    },
+                    {
+                      "key": "search",
+                      "value": "Jane",
+                      "description": "Search reporter or subject"
+                    },
+                    {
+                      "key": "page",
+                      "value": "1",
+                      "description": "Page number"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "20",
+                      "description": "Items per page"
+                    }
+                  ]
+                },
+                "description": "Centralized moderation queue with status + search filters."
+              },
+              "response": []
+            },
+            {
+              "name": "Get Report Details",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/reports/{{reportId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "reports",
+                    "{{reportId}}"
+                  ],
+                  "variable": [
+                    {
+                      "key": "reportId",
+                      "value": "",
+                      "description": ""
+                    }
+                  ]
+                },
+                "description": "Full details + polymorphic subject information."
+              },
+              "response": []
+            },
+            {
+              "name": "Update Report Status",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/reports/{{reportId}}/status",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "reports",
+                    "{{reportId}}",
+                    "status"
+                  ],
+                  "variable": [
+                    {
+                      "key": "reportId",
+                      "value": "",
+                      "description": ""
+                    }
+                  ]
+                },
+                "description": "Set report status to Open/Resolved/Closed.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"status\": \"Resolved\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Take Action On Report",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/reports/{{reportId}}/action",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "reports",
+                    "{{reportId}}",
+                    "action"
+                  ],
+                  "variable": [
+                    {
+                      "key": "reportId",
+                      "value": "",
+                      "description": ""
+                    }
+                  ]
+                },
+                "description": "Apply enforcement (resolve, block subject, etc.). action examples: resolve_and_warn, resolve_and_block.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"action\": \"resolve_and_block\",\n  \"blockReason\": \"User violated harassment policy.\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Withdrawal Oversight",
+          "item": [
+            {
+              "name": "List Withdrawals",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/withdrawals",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "withdrawals"
+                  ],
+                  "query": [
+                    {
+                      "key": "status",
+                      "value": "Pending",
+                      "description": "Pending | Approved | Rejected | Failed"
+                    },
+                    {
+                      "key": "userRole",
+                      "value": "Tutor",
+                      "description": "Tutor | LocationOwner"
+                    },
+                    {
+                      "key": "page",
+                      "value": "1",
+                      "description": "Page number"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "20",
+                      "description": "Items per page"
+                    }
+                  ]
+                },
+                "description": "Show pending/approved/failed withdrawal requests for tutors/location owners."
+              },
+              "response": []
+            },
+            {
+              "name": "Withdrawal Details",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/withdrawals/{{withdrawalId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "withdrawals",
+                    "{{withdrawalId}}"
+                  ],
+                  "variable": [
+                    {
+                      "key": "withdrawalId",
+                      "value": "",
+                      "description": ""
+                    }
+                  ]
+                },
+                "description": "Inspect a single withdrawal request including beneficiary info."
+              },
+              "response": []
+            },
+            {
+              "name": "Approve Withdrawal",
+              "request": {
+                "method": "PATCH",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/withdrawals/{{withdrawalId}}/approve",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "withdrawals",
+                    "{{withdrawalId}}",
+                    "approve"
+                  ],
+                  "variable": [
+                    {
+                      "key": "withdrawalId",
+                      "value": "",
+                      "description": ""
+                    }
+                  ]
+                },
+                "description": "Moves the payout to Processing, triggers Stripe transfer, and finalizes on success."
+              },
+              "response": []
+            },
+            {
+              "name": "Reject Withdrawal",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/withdrawals/{{withdrawalId}}/reject",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "withdrawals",
+                    "{{withdrawalId}}",
+                    "reject"
+                  ],
+                  "variable": [
+                    {
+                      "key": "withdrawalId",
+                      "value": "",
+                      "description": ""
+                    }
+                  ]
+                },
+                "description": "Return funds to the tutor/location owner and include the rejection reason.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"reason\": \"Bank details invalid.\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Global Settings",
+          "item": [
+            {
+              "name": "Get Global Settings",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/settings",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "settings"
+                  ]
+                },
+                "description": "Fetch the singleton settings document (profit distribution, withdrawal limits, etc.)."
+              },
+              "response": []
+            },
+            {
+              "name": "Update Global Settings",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/settings",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "settings"
+                  ]
+                },
+                "description": "Update specific fields such as profitDistribution, withdrawal limits, or platform toggles.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"profitDistribution\": {\n    \"platform\": 20,\n    \"tutor\": 60,\n    \"locationOwner\": 20\n  },\n  \"withdrawalLimits\": {\n    \"min\": 50,\n    \"max\": 5000\n  },\n  \"cancellationFeePercentage\": 15\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "List Categories & Sub-Categories",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/settings/categories",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "settings",
+                    "categories"
+                  ]
+                },
+                "description": "Returns both Category and SubCategory collections for admin management."
+              },
+              "response": []
+            },
+            {
+              "name": "Create Category",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/settings/categories",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "settings",
+                    "categories"
+                  ]
+                },
+                "description": "Add a new root category.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Engineering\",\n  \"icon\": \"https://cdn.example.com/icons/engineering.svg\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Update Category",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/settings/categories/{{categoryId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "settings",
+                    "categories",
+                    "{{categoryId}}"
+                  ],
+                  "variable": [
+                    {
+                      "key": "categoryId",
+                      "value": "",
+                      "description": ""
+                    }
+                  ]
+                },
+                "description": "Rename or toggle flags on a category.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Engineering & Robotics\",\n  \"isActive\": true\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Delete Category",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/settings/categories/{{categoryId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "settings",
+                    "categories",
+                    "{{categoryId}}"
+                  ],
+                  "variable": [
+                    {
+                      "key": "categoryId",
+                      "value": "",
+                      "description": ""
+                    }
+                  ]
+                },
+                "description": "Deletes a category and cascades deletion of its sub-categories."
+              },
+              "response": []
+            },
+            {
+              "name": "Create Sub-Category",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/settings/sub-categories",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "settings",
+                    "sub-categories"
+                  ]
+                },
+                "description": "Attach a new sub-category to an existing parent category.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Arduino\",\n  \"parentCategory\": \"{{categoryId}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Update Sub-Category",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/settings/sub-categories/{{subCategoryId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "settings",
+                    "sub-categories",
+                    "{{subCategoryId}}"
+                  ],
+                  "variable": [
+                    {
+                      "key": "subCategoryId",
+                      "value": "",
+                      "description": ""
+                    }
+                  ]
+                },
+                "description": "Rename a specific sub-category or change metadata.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Arduino & Microcontrollers\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Delete Sub-Category",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/settings/sub-categories/{{subCategoryId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "settings",
+                    "sub-categories",
+                    "{{subCategoryId}}"
+                  ],
+                  "variable": [
+                    {
+                      "key": "subCategoryId",
+                      "value": "",
+                      "description": ""
+                    }
+                  ]
+                },
+                "description": "Remove a single sub-category record."
+              },
+              "response": []
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8001/api/v1"
+    },
+    {
+      "key": "accessToken",
+      "value": ""
+    },
+    {
+      "key": "refreshToken",
+      "value": ""
+    }
+  ]
+}

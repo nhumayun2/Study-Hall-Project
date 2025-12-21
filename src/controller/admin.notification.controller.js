@@ -2,83 +2,210 @@ import httpStatus from "http-status";
 import catchAsync from "../utils/catchAsync.js";
 import sendResponse from "../utils/sendResponse.js";
 import AppError from "../errors/AppError.js";
+import { AdminNotification } from "../model/adminNotification.model.js";
 import { Notification } from "../model/notification.model.js";
 import { User } from "../model/user.model.js";
 
-// Internal function to create a single notification (moved from user controller)
-const createSingleNotification = async (recipientId, type, title, message) => {
-  const notification = new Notification({
-    recipient: recipientId,
-    type,
-    title,
-    message, // relatedId and onModel are omitted for general admin system messages
-  });
-  return notification.save();
+const _distributeCampaign = async (adminNotification) => {
+  let query = {};
+
+  if (adminNotification.targetAudience !== "All") {
+    query.role = adminNotification.targetAudience;
+  }
+
+  const recipients = await User.find(query).select("_id");
+
+  if (recipients.length === 0) return 0;
+
+  // 3. Prepare Bulk Insert Operations
+  const notificationsToInsert = recipients.map((user) => ({
+    recipient: user._id,
+    title: adminNotification.title,
+    message: adminNotification.message,
+    type: "AdminAlert", // Special type for admin blasts
+    isRead: false,
+    relatedEntityId: adminNotification._id, // Optional: link back to campaign
+    // relatedEntityModel: "AdminNotification" // If your polymorphic model supports it
+  }));
+
+  // 4. Execute Bulk Insert (More efficient than loop)
+  await Notification.insertMany(notificationsToInsert);
+
+  return recipients.length;
 };
 
+// ====================================================================
+// --- CONTROLLER FUNCTIONS ---
+// ====================================================================
+
 /**
- * @desc Admin: Send targeted or bulk notifications
- * @route POST /api/v1/admin/notifications/send
+ * @description ADMIN creates a new notification campaign (Draft, Scheduled, or Sent).
+ * @route POST /api/v1/admin/notifications
  * @access Admin
  */
-export const sendNotificationsAdmin = catchAsync(async (req, res) => {
-  const { type, title, message, target, role, recipientIds } = req.body;
-  if (!type || !title || !message) {
-    throw new AppError(
-      httpStatus.BAD_REQUEST,
-      "Notification title, message, and type are required."
-    );
+export const createNotification = catchAsync(async (req, res) => {
+  const { title, message, targetAudience, status, scheduledDate } = req.body;
+  const adminId = req.user._id;
+
+  if (!title || !message) {
+    throw new AppError(httpStatus.BAD_REQUEST, "Title and message are required.");
   }
 
-  let recipients = [];
-  let notificationType = "system"; // Default type for admin communications
+  // 1. Create the Master Record
+  const campaign = await AdminNotification.create({
+    title,
+    message,
+    targetAudience,
+    status: status || "Draft",
+    scheduledDate: status === "Scheduled" ? scheduledDate : null,
+    createdBy: adminId,
+    sentAt: status === "Sent" ? new Date() : null,
+  });
 
-  if (target === "bulk") {
-    // Bulk send (e.g., to all users, or all tutors)
-    const userQuery = {};
-    if (role) {
-      userQuery.role = role; // Target specific role (student, tutor, admin, etc.)
-    }
-    recipients = await User.find(userQuery).select("_id");
-    notificationType = type;
-  } else if (
-    target === "targeted" &&
-    Array.isArray(recipientIds) &&
-    recipientIds.length > 0
-  ) {
-    // Targeted send to specific user IDs
-    recipients = await User.find({ _id: { $in: recipientIds } }).select("_id");
-    notificationType = type;
-  } else {
-    throw new AppError(
-      httpStatus.BAD_REQUEST,
-      "Invalid notification target or missing recipient IDs."
-    );
+  // 2. If status is "Sent", trigger distribution immediately
+  let recipientCount = 0;
+  if (campaign.status === "Sent") {
+    recipientCount = await _distributeCampaign(campaign);
   }
 
-  if (recipients.length === 0) {
-    return sendResponse(res, {
-      statusCode: httpStatus.NOT_FOUND,
-      success: true,
-      message: "No recipients found matching the criteria.",
-      data: { count: 0 },
-    });
-  } // Create promises for all notifications
+  sendResponse(res, {
+    statusCode: httpStatus.CREATED,
+    success: true,
+    message:
+      campaign.status === "Sent"
+        ? `Notification sent successfully to ${recipientCount} users.`
+        : `Notification saved as ${campaign.status}.`,
+    data: campaign,
+  });
+});
 
-  const notificationPromises = recipients.map((user) =>
-    createSingleNotification(user._id, notificationType, title, message)
-  );
+/**
+ * @description ADMIN gets a list of all notification campaigns.
+ * @route GET /api/v1/admin/notifications
+ * @access Admin
+ */
+export const getAllNotifications = catchAsync(async (req, res) => {
+  const { page = 1, limit = 10, status, search } = req.query;
+  const skip = (parseInt(page) - 1) * parseInt(limit);
+  const query = {};
 
-  const results = await Promise.allSettled(notificationPromises);
-  const successCount = results.filter((r) => r.status === "fulfilled").length;
+  if (status) query.status = status;
+  if (search) {
+    query.title = { $regex: search, $options: "i" };
+  }
+
+  const total = await AdminNotification.countDocuments(query);
+  const notifications = await AdminNotification.find(query)
+    .populate("createdBy", "name")
+    .sort({ createdAt: -1 })
+    .skip(skip)
+    .limit(parseInt(limit));
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
-    message: `Successfully sent ${successCount} notifications.`,
+    message: "Notification campaigns fetched successfully.",
     data: {
-      totalRecipients: recipients.length,
-      successfulSends: successCount,
+      notifications,
+      total,
+      page: parseInt(page),
+      totalPages: Math.ceil(total / limit),
     },
+  });
+});
+
+/**
+ * @description ADMIN gets details of a single campaign.
+ * @route GET /api/v1/admin/notifications/:id
+ * @access Admin
+ */
+export const getNotificationDetails = catchAsync(async (req, res) => {
+  const { id } = req.params;
+  const notification = await AdminNotification.findById(id).populate(
+    "createdBy",
+    "name email"
+  );
+
+  if (!notification) {
+    throw new AppError(httpStatus.NOT_FOUND, "Notification campaign not found.");
+  }
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Notification details fetched.",
+    data: notification,
+  });
+});
+
+/**
+ * @description ADMIN updates a draft or scheduled notification.
+ * @route PATCH /api/v1/admin/notifications/:id
+ * @access Admin
+ */
+export const updateNotification = catchAsync(async (req, res) => {
+  const { id } = req.params;
+  const updates = req.body;
+
+  const campaign = await AdminNotification.findById(id);
+  if (!campaign) {
+    throw new AppError(httpStatus.NOT_FOUND, "Notification campaign not found.");
+  }
+
+  if (campaign.status === "Sent") {
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      "Cannot edit a notification that has already been sent."
+    );
+  }
+
+  // Apply updates
+  Object.assign(campaign, updates);
+
+  // If status changed to "Sent", update timestamp
+  if (updates.status === "Sent") {
+    campaign.sentAt = new Date();
+  }
+
+  await campaign.save();
+
+  // Trigger distribution if status became "Sent"
+  let recipientCount = 0;
+  if (campaign.status === "Sent") {
+    recipientCount = await _distributeCampaign(campaign);
+  }
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message:
+      campaign.status === "Sent"
+        ? `Notification updated and sent to ${recipientCount} users.`
+        : "Notification updated successfully.",
+    data: campaign,
+  });
+});
+
+/**
+ * @description ADMIN deletes a notification campaign.
+ * @route DELETE /api/v1/admin/notifications/:id
+ * @access Admin
+ */
+export const deleteNotification = catchAsync(async (req, res) => {
+  const { id } = req.params;
+  const campaign = await AdminNotification.findByIdAndDelete(id);
+
+  if (!campaign) {
+    throw new AppError(httpStatus.NOT_FOUND, "Notification campaign not found.");
+  }
+
+  // Note: We generally do NOT delete the individual user notifications 
+  // that were already sent, as users might still want to see them in their history.
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Notification campaign deleted successfully.",
+    data: null,
   });
 });

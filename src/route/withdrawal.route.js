@@ -1,42 +1,38 @@
 import express from "express";
 import {
-  requestWithdrawalUser,
-  getUserWithdrawalHistory,
+  requestWithdrawal,
+  getMyWithdrawalHistory, // Corrected function name
 } from "../controller/withdrawal.controller.js";
 import AppError from "../errors/AppError.js";
-import {
-  protect,
-  isTutor,
-  isLocationOwner,
-} from "../middleware/auth.middleware.js";
+import { protect } from "../middleware/auth.middleware.js";
+import httpStatus from "http-status";
 
-const withdrawalRouter = express.Router();
+const router = express.Router();
 
-// Middleware to ensure the user is either a Tutor OR a Location Owner
+// Middleware to ensure the user is either a Tutor or a Location Owner
 const isTutorOrLocationOwner = (req, res, next) => {
   if (req.user?.role !== "Tutor" && req.user?.role !== "LocationOwner") {
-    console.log(req.user);
     throw new AppError(
-      403,
-      "Access denied. Only Tutors and Location Owners can request withdrawals."
+      httpStatus.FORBIDDEN,
+      "Access denied. Only Tutors and Location Owners can access this feature."
     );
   }
   next();
 };
 
 // --- Apply general middleware to all withdrawal routes ---
-withdrawalRouter.use(protect, isTutorOrLocationOwner);
+router.use(protect, isTutorOrLocationOwner);
 
 /**
  * @route POST /api/v1/withdrawals/request
- * @desc Endpoint for Tutors/Location Owners to initiate a withdrawal request.
+ * @description Endpoint for Tutors/Location Owners to initiate a withdrawal request.
  */
-withdrawalRouter.post("/request", requestWithdrawalUser);
+router.post("/request", requestWithdrawal);
 
 /**
- * @route GET /api/v1/withdrawals/history
- * @desc Endpoint for Tutors/Location Owners to view their withdrawal history.
+ * @route GET /api/v1/withdrawals/my-history
+ * @description Endpoint for Tutors/Location Owners to view their withdrawal history.
  */
-withdrawalRouter.get("/history", getUserWithdrawalHistory);
+router.get("/my-history", getMyWithdrawalHistory); // Corrected function call
 
-export default withdrawalRouter;
+export default router;

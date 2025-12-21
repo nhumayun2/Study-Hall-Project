@@ -1,22 +1,35 @@
 import express from "express";
 import {
-  getAllTransactionsAdmin,
-  getTransactionDetailsAdmin,
-  processRefundAdmin,
+  getAllTransactions,
+  getTransactionDetails,
+  processRefund,
 } from "../controller/admin.transaction.controller.js";
+import { protect, isAdmin } from "../middleware/auth.middleware.js";
 
-const transactionRouter = express.Router();
+const router = express.Router();
 
-// NOTE: Authentication and Admin check middleware (protect, isAdmin)
-// will be applied in the main admin.route.js file where this router is mounted.
+// All routes in this file are protected and require admin privileges
+router.use(protect, isAdmin);
 
-// Get a list of all transactions (payments, refunds, etc.)
-transactionRouter.get("/", getAllTransactionsAdmin);
+/**
+ * @route GET /api/v1/admin/transactions
+ * @description Get a list of all transactions with filtering and pagination.
+ * @access Admin
+ */
+router.get("/", getAllTransactions);
 
-// Get details of a specific transaction for the modal view
-transactionRouter.get("/:transactionId", getTransactionDetailsAdmin);
+/**
+ * @route GET /api/v1/admin/transactions/:transactionId
+ * @description Get detailed information for a single transaction.
+ * @access Admin
+ */
+router.get("/:transactionId", getTransactionDetails);
 
-// Process a refund for a completed transaction
-transactionRouter.patch("/:transactionId/refund", processRefundAdmin);
+/**
+ * @route POST /api/v1/admin/transactions/:transactionId/refund
+ * @description Process a full or partial refund for a completed payment.
+ * @access Admin
+ */
+router.post("/:transactionId/refund", processRefund);
 
-export default transactionRouter;
+export default router;

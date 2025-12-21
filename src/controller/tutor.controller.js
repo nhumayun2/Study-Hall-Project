@@ -7,15 +7,22 @@ import { TutorApplication } from "../model/tutorApplication.model.js";
 import { uploadOnCloudinary } from "../utils/commonMethod.js";
 
 /**
- * @description USER applies to become a Tutor.
+ * @description USER applies to become a Tutor by submitting a detailed application.
  * @route POST /api/v1/tutors/apply
- * @access Authenticated User (Student)
+ * @access Authenticated User
  */
 export const applyToBeTutor = catchAsync(async (req, res) => {
   const userId = req.user._id;
-  const { educationLevel, major, categories, experience, bio } = req.body;
+  let {
+    occupation,
+    educationLevel,
+    major,
+    experience,
+    categoriesToTeach,
+    idType,
+  } = req.body;
 
-  // 1. Check if the user is already a tutor or has a pending application
+  // --- 1. VALIDATION ---
   if (req.user.role === "Tutor") {
     throw new AppError(
       httpStatus.BAD_REQUEST,
@@ -32,8 +39,6 @@ export const applyToBeTutor = catchAsync(async (req, res) => {
       "You already have a pending application under review."
     );
   }
-
-  // 2. Handle file uploads for KYC documents
   if (
     !req.files ||
     !req.files.idFront ||
@@ -42,25 +47,56 @@ export const applyToBeTutor = catchAsync(async (req, res) => {
   ) {
     throw new AppError(
       httpStatus.BAD_REQUEST,
-      "Please upload all required documents: ID front, ID back, and a selfie."
+      "ID Front, ID Back, and Selfie images are required."
     );
   }
 
+  // --- 2. SAFELY PARSE categoriesToTeach ---
+  let parsedCategories = [];
+  if (categoriesToTeach) {
+    try {
+      parsedCategories = JSON.parse(categoriesToTeach);
+      if (!Array.isArray(parsedCategories)) {
+        throw new Error(); // Ensure it's an array
+      }
+    } catch (error) {
+      throw new AppError(
+        httpStatus.BAD_REQUEST,
+        'categoriesToTeach must be a valid JSON array string (e.g., \'["id1", "id2"]\').'
+      );
+    }
+  }
+
+  // --- 3. PROCESS FILE UPLOADS ---
   const [idFrontResult, idBackResult, selfieResult] = await Promise.all([
     uploadOnCloudinary(req.files.idFront[0].buffer),
     uploadOnCloudinary(req.files.idBack[0].buffer),
     uploadOnCloudinary(req.files.selfie[0].buffer),
   ]);
 
-  // 3. Create the application document
+  let supportingDocsData = [];
+  if (
+    req.files.supportingDocuments &&
+    req.files.supportingDocuments.length > 0
+  ) {
+    supportingDocsData = await Promise.all(
+      req.files.supportingDocuments.map(async (file) => {
+        const result = await uploadOnCloudinary(file.buffer);
+        return { public_id: result.public_id, url: result.secure_url };
+      })
+    );
+  }
+
+  // --- 4. CREATE THE APPLICATION DOCUMENT ---
   const newApplication = await TutorApplication.create({
     user: userId,
+    occupation,
     educationLevel,
     major,
-    categoriesToTeach: categories, // Assuming 'categories' from body maps to this
     experience,
-    bio,
+    categoriesToTeach: parsedCategories,
     kycDocuments: {
+      idType,
       idFront: {
         public_id: idFrontResult.public_id,
         url: idFrontResult.secure_url,
@@ -74,6 +110,7 @@ export const applyToBeTutor = catchAsync(async (req, res) => {
         url: selfieResult.secure_url,
       },
     },
+    supportingDocuments: supportingDocsData,
     status: "Pending",
   });
 
@@ -81,7 +118,7 @@ export const applyToBeTutor = catchAsync(async (req, res) => {
     statusCode: httpStatus.CREATED,
     success: true,
     message:
-      "Your application to become a tutor has been submitted successfully. It is now under review by our admin team.",
+      "Your application to become a tutor has been submitted successfully.",
     data: newApplication,
   });
 });

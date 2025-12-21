@@ -2,24 +2,73 @@ import mongoose from "mongoose";
 import { Settings } from "./settings.model.js";
 
 /**
+ * @description Sub-schema for an individual enrollment (a "booking" or "ticket").
+ * This will replace the old `enrolledStudents` array.
+ */
+const enrollmentSchema = new mongoose.Schema({
+  parent: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
+    required: true,
+  },
+  // An array of _id's from the User.minors sub-document array.
+  minors: [
+    {
+      type: mongoose.Schema.Types.ObjectId,
+      required: true,
+    },
+  ],
+  paymentIntentId: {
+    type: String,
+    required: true,
+  },
+  // Store a snapshot of the price at the time of booking
+  pricePerMinor: {
+    type: Number,
+    required: true,
+  },
+  totalAmount: {
+    type: Number,
+    required: true,
+  },
+});
+
+/**
  * @description Sub-schema to track individual student attendance within a session.
+ *
+ * --- THIS IS THE FIX ---
+ * We are REMOVING the `{ _id: false }` option.
+ * Mongoose will now add a unique `_id` to each attendance record,
+ * which is essential for it to reliably track changes to nested objects
+ * like `checkIn.token` and `checkOut.token`.
+ *
+ * --- AND ---
+ * We are replacing `student` (Parent ID) with `enrollmentId` and `minorId`
+ * to track attendance for each specific child.
+ * --- END FIX ---
  */
 const attendanceSchema = new mongoose.Schema(
   {
-    student: {
+    // A reference to the specific enrollment "ticket"
+    enrollmentId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
+      required: true,
+    },
+    // The specific _id of the minor from the User.minors array
+    minorId: {
+      type: mongoose.Schema.Types.ObjectId,
       required: true,
     },
     checkIn: {
       timestamp: { type: Date, default: null },
-      token: { type: String, default: null }, // Token used for check-in
+      token: { type: String, default: null },
     },
     checkOut: {
       timestamp: { type: Date, default: null },
+      token: { type: String, default: null },
     },
-  },
-  { _id: false }
+  }
+  // `{ _id: false }` has been removed from here.
 );
 
 const sessionSchema = new mongoose.Schema(
@@ -34,12 +83,12 @@ const sessionSchema = new mongoose.Schema(
     status: {
       type: String,
       enum: [
-        "Pending", // Student Request, waiting for offers
-        "Active", // Tutor Offer, available for booking
-        "AwaitingTutorSelection", // Student Request, has offers
-        "Booked", // Session is full or confirmed
-        "Ongoing", // First student has checked in
-        "Completed", // All checked-in students have checked out
+        "Pending",
+        "Active",
+        "AwaitingTutorSelection",
+        "Booked",
+        "Ongoing",
+        "Completed",
         "Cancelled",
         "Blocked",
       ],
@@ -64,7 +113,9 @@ const sessionSchema = new mongoose.Schema(
       startTime: { type: String, required: true },
       duration: { type: Number, required: true }, // in minutes
     },
+    // Price is now PER STUDENT/MINOR
     price: { type: Number, required: true },
+    // MaxStudents is the total number of minors allowed
     maxStudents: { type: Number, default: 1 },
 
     // Location Information
@@ -76,7 +127,11 @@ const sessionSchema = new mongoose.Schema(
 
     // Relationships & Participants
     acceptedTutor: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
-    enrolledStudents: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+
+    // --- REPLACED `enrolledStudents` WITH `enrollments` ---
+    // enrolledStudents: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }], // <--- OLD
+    enrollments: [enrollmentSchema], // <--- NEW
+
     tutorApplicants: [
       {
         tutorId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
@@ -89,8 +144,7 @@ const sessionSchema = new mongoose.Schema(
       },
     ],
 
-    // NEW: Replaced checkIn/checkOut with a more robust attendance array
-    attendance: [attendanceSchema],
+    attendance: [attendanceSchema], // This schema is now fixed
 
     // Policies and Notes
     cancellationPolicy: {
@@ -106,44 +160,14 @@ const sessionSchema = new mongoose.Schema(
     tutorNote: { type: String },
 
     // Financials
-    paymentIntentId: { type: String },
+    // --- REMOVED `paymentIntentId` from the session. It's now in the `enrollmentSchema` ---
+    // paymentIntentId: { type: String }, // <--- OLD
+    checkOutToken: { type: String, select: false },
     adminCommission: { type: Number, default: 0 },
     tutorEarnings: { type: Number, default: 0 },
     locationOwnerEarnings: { type: Number, default: 0 },
   },
   { timestamps: true }
 );
-
-// Middleware to calculate profit distribution when session is marked as Completed
-sessionSchema.pre("save", async function (next) {
-  // Trigger calculation only when the status is changed to 'Completed' and price is > 0
-  if (
-    this.isModified("status") &&
-    this.status === "Completed" &&
-    this.price > 0
-  ) {
-    try {
-      const settings = await Settings.getSettings();
-      // Price is per student, so total revenue is price * number of attendees
-      const totalAmount =
-        this.price * this.attendance.filter((a) => a.checkIn.timestamp).length;
-
-      const platformRate = settings.profitDistribution.platform / 100;
-      const tutorRate = settings.profitDistribution.tutor / 100;
-      const locationOwnerRate = settings.profitDistribution.locationOwner / 100;
-
-      this.adminCommission = parseFloat(
-        (totalAmount * platformRate).toFixed(2)
-      );
-      this.tutorEarnings = parseFloat((totalAmount * tutorRate).toFixed(2));
-      this.locationOwnerEarnings = parseFloat(
-        (totalAmount * locationOwnerRate).toFixed(2)
-      );
-    } catch (error) {
-      console.error("Error calculating profit distribution:", error);
-    }
-  }
-  next();
-});
 
 export const Session = mongoose.model("Session", sessionSchema);
